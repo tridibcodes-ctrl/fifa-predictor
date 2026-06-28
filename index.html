@@ -1076,11 +1076,29 @@ TLA_MAP['RSA'] = 'RSA'; TLA_MAP['SUI'] = 'SUI'; TLA_MAP['PAR'] = 'PAR';
 
 function resolveApiTeam(apiTeam) {
   if (!apiTeam) return null;
-  if (apiTeam.tla && TLA_MAP[apiTeam.tla]) return TLA_MAP[apiTeam.tla];
-  if (apiTeam.tla && TEAMS[apiTeam.tla]) return apiTeam.tla;
-  if (apiTeam.name && NAME_MAP[apiTeam.name]) return NAME_MAP[apiTeam.name];
-  if (apiTeam.shortName && NAME_MAP[apiTeam.shortName]) return NAME_MAP[apiTeam.shortName];
-  return apiTeam.tla || null;
+  
+  let code = null;
+  if (apiTeam.tla && TLA_MAP[apiTeam.tla]) code = TLA_MAP[apiTeam.tla];
+  else if (apiTeam.tla && TEAMS[apiTeam.tla]) code = apiTeam.tla;
+  else if (apiTeam.name && NAME_MAP[apiTeam.name]) code = NAME_MAP[apiTeam.name];
+  else if (apiTeam.shortName && NAME_MAP[apiTeam.shortName]) code = NAME_MAP[apiTeam.shortName];
+  
+  // If the team is completely missing from our hardcoded list, dynamically register it
+  // so we don't drop matches for unmapped World Cup 2026 teams!
+  if (!code && apiTeam.tla) {
+    code = apiTeam.tla;
+    TEAMS[code] = { name: apiTeam.name || apiTeam.shortName || code, iso2: code.toLowerCase().substring(0, 2) };
+    if (typeof TEAM_MODELS !== 'undefined') TEAM_MODELS[code] = { attack: 1.0, defense: 1.0, elo: 1500 };
+    if (typeof teamStats !== 'undefined' && !teamStats[code]) {
+      teamStats[code] = {
+        matchesPlayed: 0, wins: 0, draws: 0, losses: 0,
+        goalsFor: 0, goalsAgainst: 0, cleanSheets: 0,
+        opponentsBeaten: [], lastMatchWeight: 1.0, inForm: false, matchHistory: []
+      };
+    }
+  }
+
+  return code || apiTeam.tla || null;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
