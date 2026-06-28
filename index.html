@@ -895,17 +895,14 @@ body {
 <div id="match-insight"></div>
 <div id="upset-banner"></div>
 
-<script src="config.js"></script>
 <script>
 /* ═══════════════════════════════════════════════════════════════════════
    SECTION 1: CONFIGURATION
    ═══════════════════════════════════════════════════════════════════════ */
 const CONFIG = {
-  FOOTBALL_DATA_KEYS: (window.ENV && window.ENV.API_KEYS) || ['YOUR_KEY_HERE'],
   POLL_INTERVAL_MS: 60000,
   WC_COMPETITION_ID: 2000,
   MONTE_CARLO_N: 5000,
-  currentKeyIndex: 0,
   // Model hyperparameters (tunable, can be validated against historical data)
   MODEL: {
     ELO_DENOMINATOR: 400,
@@ -2204,24 +2201,14 @@ const STAGE_MAP = {
 };
 
 async function fetchMatches() {
-  const validKeys = CONFIG.FOOTBALL_DATA_KEYS.filter(k => k && k !== 'YOUR_KEY_HERE' && !k.includes('YOUR_KEY_'));
-  if (validKeys.length === 0) {
-    updateStatusBar('idle', 'No API key — predictions only');
-    return;
-  }
-
   // file:// origin sends 'null' which football-data.org rejects.
-  // The user must serve from localhost or deploy to GitHub Pages.
+  // The user must serve from localhost or deploy to Vercel/GitHub Pages.
   if (window.location.protocol === 'file:') {
-    updateStatusBar('error', 'Serve from localhost for live data (see console)');
+    updateStatusBar('error', 'Serve from localhost or Vercel for live data');
     console.info(
-      '%cWorld Cup Bracket — CORS fix%c\n\n' +
+      '%cWorld Cup Bracket — Live Data Blocked%c\n\n' +
       'Opening index.html directly (file://) blocks API requests.\n' +
-      'Serve it from localhost instead:\n\n' +
-      '  Option 1:  npx serve .            (Node.js)\n' +
-      '  Option 2:  python -m http.server  (Python)\n\n' +
-      'Then open http://localhost:3000 (or :8000 for Python).\n' +
-      'On GitHub Pages this works automatically.',
+      'Serve it using a local server (e.g. npx serve .) or deploy to Vercel.',
       'font-weight:bold;font-size:14px;color:#f59e0b',
       'font-size:12px;color:#ccc'
     );
@@ -2235,14 +2222,12 @@ async function fetchMatches() {
 
     for (const stage of stages) {
       try {
-        const key = validKeys[CONFIG.currentKeyIndex % validKeys.length];
-        const url = 'https://api.football-data.org/v4/competitions/' + CONFIG.WC_COMPETITION_ID + '/matches?stage=' + stage;
-        const res = await fetch(url, { headers: { 'X-Auth-Token': key } });
+        // Fetch from our secure Vercel Serverless Function proxy
+        const url = `/api/matches?stage=${stage}`;
+        const res = await fetch(url);
         
         if (res.status === 429) {
-          // Rate limited -> rotate key and retry next cycle
-          CONFIG.currentKeyIndex++;
-          updateStatusBar('error', 'Rate limited. Rotating key…');
+          updateStatusBar('error', 'API rate limited');
           return;
         }
         
