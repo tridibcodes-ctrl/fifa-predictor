@@ -1,0 +1,2475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FIFA World Cup 2026 — Knockout bracket tracker</title>
+<meta name="description" content="Live FIFA World Cup 2026 knockout bracket tracker with Poisson-based prediction engine and Monte Carlo tournament simulation">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ══════════════════════════════════════════════════════════
+   RESET & BASE
+   ══════════════════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+}
+body {
+  background: #000;
+  color: #e0e0e0;
+  min-height: 100vh;
+  overflow-x: auto;
+  position: relative;
+}
+
+/* ════════════════════════════════════════════════════════
+   SLIM NAVBAR HEADER
+   ════════════════════════════════════════════════════════ */
+.site-header {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 54px;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  user-select: none;
+  flex-shrink: 0;
+}
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.nav-ball img {
+  height: 36px;
+  width: auto;
+  object-fit: contain;
+}
+.nav-titles {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
+.nav-title {
+  font-family: 'Bebas Neue', 'Inter', sans-serif;
+  font-size: 20px;
+  letter-spacing: 3px;
+  color: #fff;
+  text-transform: uppercase;
+}
+.nav-subtitle {
+  font-size: 9px;
+  color: rgba(255,255,255,0.35);
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  margin-top: 1px;
+}
+
+/* ════════════════════════════════════════════════════════
+   FULL-PAGE BACKGROUND SCENE
+   ════════════════════════════════════════════════════════ */
+#page-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+/* Trophy image watermark */
+#page-bg .bg-trophy {
+  position: absolute;
+  right: -4vw;
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(420px, 38vw);
+  height: auto;
+  opacity: 0.07;
+  filter: grayscale(0.2) blur(1px);
+  pointer-events: none;
+  user-select: none;
+}
+/* Large text watermark */
+#page-bg .bg-wordmark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-family: 'Bebas Neue', 'Inter', sans-serif;
+  font-size: min(18vw, 220px);
+  letter-spacing: 0.05em;
+  color: rgba(255,255,255,0.018);
+  white-space: nowrap;
+  line-height: 1;
+  text-transform: uppercase;
+  pointer-events: none;
+  user-select: none;
+}
+
+
+@keyframes shimmer {
+  0%,100% { background-position: 0% center; }
+  50%      { background-position: 100% center; }
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   STATUS BAR (top-right)
+   ══════════════════════════════════════════════════════════ */
+#status-bar {
+  position: fixed;
+  top: 14px;
+  right: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: rgba(17,17,17,0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid #1e1e1e;
+  border-radius: 20px;
+  font-size: 11px;
+  color: #888;
+  z-index: 1000;
+  user-select: none;
+}
+.status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.status-dot.live   { background: #22c55e; animation: pulse 1.8s ease-in-out infinite; }
+.status-dot.idle   { background: #10b981; }
+.status-dot.error  { background: #f59e0b; animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse {
+  0%,100% { opacity: 1; box-shadow: 0 0 0 0 currentColor; }
+  50% { opacity: 0.5; box-shadow: 0 0 6px 2px currentColor; }
+}
+#refresh-btn {
+  background: none; border: none; color: #888; cursor: pointer;
+  font-size: 14px; line-height: 1; padding: 2px;
+  transition: color 0.2s, transform 0.3s;
+}
+#refresh-btn:hover { color: #f59e0b; transform: rotate(180deg); }
+
+/* ══════════════════════════════════════════════════════════
+   BRACKET WRAPPER & GRID
+   ══════════════════════════════════════════════════════════ */
+#bracket-wrapper {
+  overflow-x: auto;
+  overflow-y: visible;
+  padding: 0 20px 20px;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+  z-index: 2;
+}
+#bracket-wrapper::-webkit-scrollbar { height: 6px; }
+#bracket-wrapper::-webkit-scrollbar-track { background: transparent; }
+#bracket-wrapper::-webkit-scrollbar-thumb { background: #222; border-radius: 3px; }
+
+.round-headers {
+  display: flex;
+  gap: 20px;
+  width: fit-content;
+  margin: 0 auto;
+  padding: 12px 40px 0;
+}
+.round-header {
+  width: 170px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: #444;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #1a1a1a;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+.round-header:hover {
+  color: #fff;
+  border-bottom-color: rgba(255,255,255,0.3);
+}
+.round-header.final-header {
+  width: 190px;
+  color: #f59e0b;
+  border-bottom-color: rgba(245,158,11,0.25);
+}
+
+.bracket {
+  display: flex;
+  align-items: stretch;
+  gap: 20px;
+  min-height: 1200px;
+  width: fit-content;
+  margin: 0 auto;
+  padding: 12px 40px 40px;
+  position: relative;
+}
+.bracket-column {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  align-items: center;
+  width: 170px;
+  flex-shrink: 0;
+}
+.bracket-column.final-col {
+  width: 190px;
+}
+
+/* ══════════════════════════════════════════════════════════
+   MATCH CARD
+   ══════════════════════════════════════════════════════════ */
+.match-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.match-card {
+  width: 160px;
+  background: rgba(14,14,14,0.88);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.3s ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.match-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+  border-color: #2a2a2a;
+}
+.match-card.in-play {
+  border-color: rgba(34,197,94,0.4);
+  box-shadow: 0 0 12px rgba(34,197,94,0.08);
+}
+
+/* Final card overrides */
+.final-col .match-card {
+  width: 180px;
+  border-color: rgba(245,158,11,0.2);
+  background: rgba(16,14,10,0.9);
+}
+.final-col .match-card:hover {
+  border-color: rgba(245,158,11,0.4);
+  box-shadow: 0 8px 28px rgba(245,158,11,0.08);
+}
+
+/* ══════════════════════════════════════════════════════════
+   TEAM ROW
+   ══════════════════════════════════════════════════════════ */
+.team-row {
+  display: flex;
+  align-items: center;
+  padding: 7px 10px 7px 8px;
+  gap: 7px;
+  border-left: 3px solid transparent;
+  transition: border-color 0.3s, opacity 0.4s, background 0.2s;
+  cursor: default;
+}
+.team-row + .team-row {
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+.team-row.winner {
+  border-left-color: #f59e0b;
+  background: rgba(245,158,11,0.05);
+}
+.team-row.winner .team-name { color: #f0f0f0; font-weight: 600; }
+.team-row.winner .team-score { color: #f59e0b; }
+.team-row.eliminated { opacity: 0.35; }
+.team-row.clickable { cursor: default; }
+
+/* Predicted (unconfirmed) team styling */
+.team-row.predicted .team-flag-img { opacity: 0.25; filter: grayscale(0.5); }
+.team-row.predicted .team-name {
+  color: #3d3d3d;
+  font-style: italic;
+  font-weight: 400;
+}
+.team-row.predicted .team-score { color: #2a2a2a; }
+.team-row.pred-winner:not(.winner) {
+  border-left: 3px dashed rgba(59,130,246,0.35);
+  background: rgba(59,130,246,0.03);
+}
+.team-row.pred-winner:not(.winner) .team-name {
+  color: #5a85cc;
+  font-style: italic;
+}
+
+/* Flag image */
+.team-flag-img {
+  width: 20px;
+  height: 14px;
+  object-fit: cover;
+  border-radius: 2px;
+  flex-shrink: 0;
+  display: block;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+.team-flag-img.flag-placeholder {
+  background: #1e1e1e;
+  border: 1px solid #2a2a2a;
+}
+.team-name {
+  flex: 1;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #aaa;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.3s;
+}
+.team-name.placeholder {
+  font-style: italic;
+  color: #444;
+  font-weight: 400;
+}
+.team-score {
+  font-size: 13px;
+  font-weight: 700;
+  color: #666;
+  min-width: 16px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.3s;
+}
+
+/* ══════════════════════════════════════════════════════════
+   PREDICTION BADGE & BAR
+   ══════════════════════════════════════════════════════════ */
+.prediction-badge {
+  text-align: center;
+  min-height: 18px;
+}
+.badge-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+.badge-blue  { background: rgba(59,130,246,0.12); color: #3b82f6; }
+.badge-amber { background: rgba(245,158,11,0.12); color: #f59e0b; }
+.badge-grey  { background: rgba(128,128,128,0.1); color: #666; }
+
+.prob-bar {
+  width: 160px;
+  height: 2px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 1px;
+  overflow: hidden;
+}
+.final-col .prob-bar { width: 180px; }
+.prob-bar-fill {
+  height: 100%;
+  border-radius: 1px;
+  transition: width 0.5s ease, background 0.5s ease;
+}
+.prob-bar-fill.bar-blue  { background: #3b82f6; }
+.prob-bar-fill.bar-amber { background: #f59e0b; }
+.prob-bar-fill.bar-grey  { background: #555; }
+
+/* ══════════════════════════════════════════════════════════
+   FT TAG
+   ══════════════════════════════════════════════════════════ */
+.ft-tag {
+  position: absolute;
+  bottom: 3px;
+  left: 8px;
+  font-size: 8px;
+  font-weight: 700;
+  color: #22c55e;
+  letter-spacing: 0.8px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.ft-tag.visible { opacity: 1; }
+
+/* ══════════════════════════════════════════════════════════
+   TROPHY & FINAL EXTRAS
+   ══════════════════════════════════════════════════════════ */
+.trophy-icon {
+  font-size: 28px;
+  text-align: center;
+  margin-bottom: 4px;
+  filter: drop-shadow(0 0 8px rgba(245,158,11,0.3));
+  animation: trophy-glow 3s ease-in-out infinite;
+}
+@keyframes trophy-glow {
+  0%,100% { filter: drop-shadow(0 0 6px rgba(245,158,11,0.2)); }
+  50% { filter: drop-shadow(0 0 14px rgba(245,158,11,0.45)); }
+}
+.predicted-final-label {
+  font-size: 10px;
+  color: #444;
+  text-align: center;
+  margin-top: 6px;
+  font-style: italic;
+}
+.third-place-section {
+  margin-top: 24px;
+  text-align: center;
+}
+.third-place-label {
+  font-size: 9px;
+  color: #444;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+
+/* ══════════════════════════════════════════════════════════
+   SVG CONNECTORS
+   ══════════════════════════════════════════════════════════ */
+#connectors {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+.bracket-column, .match-slot, .match-card { position: relative; z-index: 1; }
+
+/* ══════════════════════════════════════════════════════════
+   MATCH INSIGHT PANEL (card hover)
+   ══════════════════════════════════════════════════════════ */
+#match-insight {
+  position: fixed;
+  display: none;
+  width: 320px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  background: #111;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 0;
+  z-index: 2000;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.9);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px) scale(0.98);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  font-variant-numeric: tabular-nums;
+}
+#match-insight::-webkit-scrollbar { width: 4px; }
+#match-insight::-webkit-scrollbar-thumb { background: #222; border-radius: 2px; }
+#match-insight.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+/* Header row */
+.mi-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.mi-round-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: #444;
+}
+.mi-status-tag {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(59,130,246,0.12);
+  color: #3b82f6;
+}
+.mi-status-tag.live { background: rgba(34,197,94,0.15); color: #22c55e; }
+.mi-status-tag.ft   { background: rgba(255,255,255,0.06); color: #555; }
+.mi-date-row {
+  padding: 0 14px;
+  font-size: 9px;
+  color: #333;
+  margin-top: 2px;
+}
+
+/* VS row with flags */
+.mi-vs-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 8px;
+}
+.mi-team {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+}
+.mi-flag-wrap {
+  width: 44px;
+  height: 32px;
+  border-radius: 3px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  flex-shrink: 0;
+  background: #1a1a1a;
+}
+.mi-flag-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.mi-team-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: #ccc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 105px;
+}
+.mi-team-name.is-winner { color: #f59e0b; }
+.mi-team-name.predicted-style { color: #4a5a80; font-style: italic; }
+.mi-form-line {
+  font-size: 9px;
+  color: #444;
+  letter-spacing: 0.3px;
+}
+.mi-form-line .fw { color: #22c55e; font-weight: 600; }
+.mi-form-line .fd { color: #666; }
+.mi-form-line .fl { color: #ef4444; font-weight: 600; }
+.mi-score-big {
+  font-size: 24px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -1px;
+}
+.mi-score-sep {
+  font-size: 16px;
+  font-weight: 300;
+  color: #333;
+}
+.mi-vs-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #2a2a2a;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Probability bar */
+.mi-prob-section {
+  padding: 0 14px 8px;
+}
+.mi-prob-bar-wrap {
+  position: relative;
+  height: 5px;
+  background: #1a1a1a;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.mi-prob-bar-a {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: #f59e0b;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+.mi-prob-bar-b {
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  background: #3b82f6;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+.mi-prob-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  font-weight: 700;
+  color: #666;
+}
+.mi-prob-labels .prob-a { color: #f59e0b; }
+.mi-prob-labels .prob-b { color: #3b82f6; }
+
+/* Comparison table */
+.mi-compare {
+  border-top: 1px solid rgba(255,255,255,0.04);
+  padding: 8px 0 4px;
+}
+.mi-compare-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 0;
+  padding: 3px 14px;
+  align-items: center;
+}
+.mi-compare-row:nth-child(odd) { background: rgba(255,255,255,0.015); }
+.mi-cval {
+  font-size: 10px;
+  font-weight: 600;
+  color: #666;
+}
+.mi-cval:first-child { text-align: right; padding-right: 10px; }
+.mi-cval:last-child  { text-align: left;  padding-left: 10px; }
+.mi-cval.lead { color: #e0e0e0; }
+.mi-clabel {
+  font-size: 8.5px;
+  color: #333;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  white-space: nowrap;
+}
+
+/* Recent results */
+.mi-results-section {
+  border-top: 1px solid rgba(255,255,255,0.04);
+  padding: 8px 14px 10px;
+}
+.mi-results-title {
+  font-size: 8.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #2a2a2a;
+  margin-bottom: 5px;
+}
+.mi-results-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 16px;
+}
+.mi-result-item {
+  font-size: 9px;
+  color: #444;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 0;
+}
+.mi-result-item .rw { color: #22c55e; font-weight: 700; min-width: 10px; }
+.mi-result-item .rl { color: #ef4444; font-weight: 700; min-width: 10px; }
+.mi-result-item .rd { color: #666;    font-weight: 700; min-width: 10px; }
+
+/* Calculation Breakdown */
+.mi-calc-section {
+  border-top: 1px solid rgba(255,255,255,0.04);
+  padding: 8px 14px 10px;
+}
+.mi-calc-title {
+  font-size: 8.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #2a2a2a;
+  margin-bottom: 5px;
+}
+.mi-calc-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.mi-calc-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: #555;
+  padding: 1px 0;
+}
+.mi-calc-row .lbl { color: #444; }
+.mi-calc-row .val { font-weight: 600; font-variant-numeric: tabular-nums; }
+.mi-calc-row.total {
+  border-top: 1px solid rgba(255,255,255,0.04);
+  margin-top: 2px;
+  padding-top: 2px;
+  color: #e0e0e0;
+}
+.mi-calc-row.total .lbl { color: #888; }
+.mi-calc-row .pos { color: #22c55e; }
+.mi-calc-row .neg { color: #ef4444; }
+
+.mi-momentum-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-weight: 600;
+  background: rgba(34,197,94,0.1);
+  color: #22c55e;
+  margin-top: 4px;
+}
+
+/* ══════════════════════════════════════════════════════════
+   UPSET BANNER
+   ══════════════════════════════════════════════════════════ */
+#upset-banner {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  text-align: center;
+  padding: 12px 20px;
+  background: linear-gradient(90deg, rgba(239,68,68,0.9), rgba(220,38,38,0.95));
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  z-index: 3000;
+  transform: translateY(-100%);
+  opacity: 0;
+  transition: none;
+}
+#upset-banner.show {
+  animation: upset-slide 4s ease forwards;
+}
+@keyframes upset-slide {
+  0%   { transform: translateY(-100%); opacity: 0; }
+  8%   { transform: translateY(0); opacity: 1; }
+  85%  { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(-100%); opacity: 0; }
+}
+
+/* ══════════════════════════════════════════════════════════
+   TOURNAMENT ODDS PANEL
+   ══════════════════════════════════════════════════════════ */
+#tournament-odds {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px 40px 40px;
+  position: relative;
+  z-index: 2;
+}
+.odds-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: #444;
+  margin-bottom: 12px;
+  text-align: center;
+}
+.odds-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.odds-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: #111;
+  border: 1px solid #1e1e1e;
+  border-radius: 6px;
+  font-size: 11px;
+  transition: border-color 0.2s;
+}
+.odds-chip:hover { border-color: #333; }
+.odds-chip .chip-flag { font-size: 14px; line-height: 1; }
+.odds-chip .chip-flag img { width: 16px; height: 11px; object-fit: cover; border-radius: 1px; vertical-align: middle; }
+.odds-chip .chip-code { color: #888; font-weight: 600; min-width: 26px; }
+.odds-chip .chip-pct {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 36px;
+  text-align: right;
+}
+.odds-chip .chip-pct.high { color: #f59e0b; }
+.odds-chip .chip-pct.mid  { color: #3b82f6; }
+.odds-chip .chip-pct.low  { color: #555; }
+.odds-chip .chip-bar-bg {
+  width: 40px; height: 3px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.odds-chip .chip-bar {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+
+/* ══════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE
+   ══════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .site-header { padding-top: 18px; }
+  .site-header h1 { font-size: 20px; }
+  #status-bar { top: 8px; right: 8px; font-size: 10px; padding: 4px 10px; }
+
+  .round-headers { display: none; }
+
+  .bracket {
+    flex-direction: column-reverse;
+    min-height: auto;
+    gap: 24px;
+    padding: 12px 16px 32px;
+    width: 100%;
+  }
+  .bracket-column {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    width: 100% !important;
+  }
+  .match-slot { width: auto; }
+  #connectors { display: none; }
+
+  .mobile-round-label {
+    display: block !important;
+    width: 100%;
+    text-align: center;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #444;
+    padding: 4px 0;
+    border-bottom: 1px solid #1a1a1a;
+    margin-bottom: 2px;
+  }
+  .final-col .mobile-round-label { color: #f59e0b; border-bottom-color: rgba(245,158,11,0.25); }
+
+  .odds-grid { padding: 0 8px; }
+  .odds-chip .chip-bar-bg { display: none; }
+}
+@media (min-width: 769px) {
+  .mobile-round-label { display: none !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- Full-page background scene -->
+<div id="page-bg" aria-hidden="true">
+
+  <img class="bg-trophy" src="trophy.png" alt="" draggable="false">
+  <div class="bg-wordmark">2026</div>
+</div>
+
+<!-- Slim navbar -->
+<div class="site-header">
+  <div class="nav-brand">
+    <div class="nav-ball">
+      <img src="IMG_6227.png" alt="FIFA 26">
+    </div>
+    <div class="nav-titles">
+      <span class="nav-title">FIFA World Cup 2026</span>
+      <span class="nav-subtitle">Knockout Bracket &middot; Prediction Engine</span>
+    </div>
+  </div>
+</div>
+
+<div id="status-bar">
+  <span class="status-dot idle" id="status-dot"></span>
+  <span id="status-text">Initialising…</span>
+  <button id="refresh-btn" title="Refresh now">⟳</button>
+</div>
+
+<div id="bracket-wrapper"></div>
+<div id="tournament-odds"></div>
+<div id="match-insight"></div>
+<div id="upset-banner"></div>
+
+<script src="config.js"></script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 1: CONFIGURATION
+   ═══════════════════════════════════════════════════════════════════════ */
+const CONFIG = {
+  FOOTBALL_DATA_KEYS: (window.ENV && window.ENV.API_KEYS) || ['YOUR_KEY_HERE'],
+  POLL_INTERVAL_MS: 60000,
+  WC_COMPETITION_ID: 2000,
+  MONTE_CARLO_N: 5000,
+  currentKeyIndex: 0,
+  // Model hyperparameters (tunable, can be validated against historical data)
+  MODEL: {
+    ELO_DENOMINATOR: 400,
+    HOME_ADVANTAGE_ELO: 65,
+    MAX_EVIDENCE_ADJ: 150,
+    PATH_ADJ_MAX: 40,
+    PATH_ADJ_MIN: -20,
+    MOMENTUM_BONUS: 20,
+    EVIDENCE_WEIGHTS: {
+      PERF_DIFF: 0.6,
+      CS_RATE: 0.25,
+      EFFICIENCY: 0.15
+    },
+    EVIDENCE_SCALE: 60,
+    LAST_MATCH_WEIGHT_MULT: 2.0,
+    LAST_MATCH_WEIGHT_CAP: 3.0,
+    WINNER_WEIGHT_MULT: 1.5,
+    FORM_GOAL_DIFF_THRESHOLD: 2,
+    DRAW_ELO_THRESHOLD: 50,
+    POISSON_GOAL_EXP: 1.0,
+    FORM_DECAY_PER_MATCH: 0.85,
+    FATIGUE_PENALTY_PER_MATCH: 0.02
+  }
+};
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 2: TEAM DATA
+   ═══════════════════════════════════════════════════════════════════════ */
+const TEAMS = {
+  GER: { name: 'Germany',        iso2: 'de' },
+  PAR: { name: 'Paraguay',       iso2: 'py' },
+  RSA: { name: 'South Africa',   iso2: 'za' },
+  CAN: { name: 'Canada',         iso2: 'ca' },
+  FRA: { name: 'France',         iso2: 'fr' },
+  SWE: { name: 'Sweden',         iso2: 'se' },
+  NED: { name: 'Netherlands',    iso2: 'nl' },
+  MAR: { name: 'Morocco',        iso2: 'ma' },
+  POR: { name: 'Portugal',       iso2: 'pt' },
+  CRO: { name: 'Croatia',        iso2: 'hr' },
+  ESP: { name: 'Spain',          iso2: 'es' },
+  AUT: { name: 'Austria',        iso2: 'at' },
+  USA: { name: 'United States',  iso2: 'us' },
+  BIH: { name: 'Bosnia & Herz.', iso2: 'ba' },
+  BEL: { name: 'Belgium',        iso2: 'be' },
+  SEN: { name: 'Senegal',        iso2: 'sn' },
+  BRA: { name: 'Brazil',         iso2: 'br' },
+  JPN: { name: 'Japan',          iso2: 'jp' },
+  CIV: { name: 'Ivory Coast',    iso2: 'ci' },
+  NOR: { name: 'Norway',         iso2: 'no' },
+  MEX: { name: 'Mexico',         iso2: 'mx' },
+  ECU: { name: 'Ecuador',        iso2: 'ec' },
+  ENG: { name: 'England',        iso2: 'gb-eng' },
+  COD: { name: 'DR Congo',       iso2: 'cd' },
+  ARG: { name: 'Argentina',      iso2: 'ar' },
+  CPV: { name: 'Cape Verde',     iso2: 'cv' },
+  AUS: { name: 'Australia',      iso2: 'au' },
+  EGY: { name: 'Egypt',          iso2: 'eg' },
+  SUI: { name: 'Switzerland',    iso2: 'ch' },
+  ALG: { name: 'Algeria',        iso2: 'dz' },
+  COL: { name: 'Colombia',       iso2: 'co' },
+  GHA: { name: 'Ghana',          iso2: 'gh' }
+};
+
+// Helper: builds the flagcdn URL for a team code (20×14 retina)
+function flagUrl(code) {
+  const t = TEAMS[code];
+  if (!t) return '';
+  return 'https://flagcdn.com/40x30/' + t.iso2 + '.png';
+}
+
+// Helper: creates or updates a flag <img> element
+function setFlagImg(imgEl, code) {
+  if (!imgEl) return;
+  if (code && TEAMS[code]) {
+    imgEl.src = flagUrl(code);
+    imgEl.alt = TEAMS[code].name;
+    imgEl.title = TEAMS[code].name;
+    imgEl.classList.remove('flag-placeholder');
+  } else {
+    imgEl.src = '';
+    imgEl.alt = '';
+    imgEl.classList.add('flag-placeholder');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 3: TEAM RATINGS (Elo-derived attack / defense)
+   ═══════════════════════════════════════════════════════════════════════ */
+const TEAM_RATINGS = {
+  BRA: { attack: 1.82, defense: 0.61, elo: 2082 },
+  ARG: { attack: 1.71, defense: 0.66, elo: 2080 },
+  FRA: { attack: 1.74, defense: 0.64, elo: 2003 },
+  ESP: { attack: 1.65, defense: 0.67, elo: 1975 },
+  ENG: { attack: 1.61, defense: 0.70, elo: 1966 },
+  POR: { attack: 1.63, defense: 0.71, elo: 1960 },
+  GER: { attack: 1.58, defense: 0.72, elo: 1954 },
+  NED: { attack: 1.54, defense: 0.75, elo: 1942 },
+  BEL: { attack: 1.45, defense: 0.78, elo: 1920 },
+  CRO: { attack: 1.48, defense: 0.76, elo: 1915 },
+  COL: { attack: 1.42, defense: 0.80, elo: 1905 },
+  MAR: { attack: 1.38, defense: 0.81, elo: 1890 },
+  USA: { attack: 1.38, defense: 0.82, elo: 1885 },
+  SUI: { attack: 1.35, defense: 0.83, elo: 1878 },
+  MEX: { attack: 1.30, defense: 0.85, elo: 1855 },
+  JPN: { attack: 1.32, defense: 0.84, elo: 1862 },
+  AUT: { attack: 1.28, defense: 0.86, elo: 1845 },
+  SWE: { attack: 1.25, defense: 0.87, elo: 1835 },
+  ECU: { attack: 1.22, defense: 0.89, elo: 1820 },
+  SEN: { attack: 1.20, defense: 0.90, elo: 1810 },
+  NOR: { attack: 1.20, defense: 0.90, elo: 1808 },
+  CIV: { attack: 1.18, defense: 0.91, elo: 1800 },
+  CAN: { attack: 1.16, defense: 0.92, elo: 1790 },
+  AUS: { attack: 1.15, defense: 0.92, elo: 1780 },
+  EGY: { attack: 1.12, defense: 0.94, elo: 1770 },
+  GHA: { attack: 1.10, defense: 0.95, elo: 1755 },
+  BIH: { attack: 1.10, defense: 0.96, elo: 1748 },
+  ALG: { attack: 1.08, defense: 0.96, elo: 1745 },
+  RSA: { attack: 1.05, defense: 0.98, elo: 1720 },
+  PAR: { attack: 1.02, defense: 1.02, elo: 1700 },
+  COD: { attack: 0.98, defense: 1.05, elo: 1690 },
+  CPV: { attack: 0.88, defense: 1.12, elo: 1640 }
+};
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 3b: DYNAMIC TEAM STATS (Evidence Stacking)
+   ═══════════════════════════════════════════════════════════════════════ */
+const teamStats = {};
+for (const code of Object.keys(TEAMS)) {
+  teamStats[code] = {
+    matchesPlayed: 0,
+    wins: 0,
+    draws: 0,
+    losses: 0,
+    goalsFor: 0,
+    goalsAgainst: 0,
+    xGFor: 0,
+    xGAgainst: 0,
+    shotsFor: 0,
+    shotsOnTarget: 0,
+    cleanSheets: 0,
+    opponentsBeaten: [],
+    lastMatchWeight: 1.0,
+    inForm: false,
+    matchHistory: [],
+    daysSinceLastMatch: null
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 4: API NAME MAP
+   ═══════════════════════════════════════════════════════════════════════ */
+const NAME_MAP = {
+  'Germany': 'GER', 'Paraguay': 'PAR', 'South Africa': 'RSA', 'Canada': 'CAN',
+  'France': 'FRA', 'Sweden': 'SWE', 'Netherlands': 'NED', 'Morocco': 'MAR',
+  'Portugal': 'POR', 'Croatia': 'CRO', 'Spain': 'ESP', 'Austria': 'AUT',
+  'United States': 'USA', 'Bosnia and Herzegovina': 'BIH', 'Bosnia & Herzegovina': 'BIH',
+  'Belgium': 'BEL', 'Senegal': 'SEN', 'Brazil': 'BRA', 'Japan': 'JPN',
+  "Côte d'Ivoire": 'CIV', 'Ivory Coast': 'CIV', 'Cote d\'Ivoire': 'CIV',
+  'Norway': 'NOR', 'Mexico': 'MEX', 'Ecuador': 'ECU', 'England': 'ENG',
+  'DR Congo': 'COD', 'Congo DR': 'COD', 'Congo': 'COD',
+  'Argentina': 'ARG', 'Cape Verde': 'CPV', 'Cabo Verde': 'CPV',
+  'Australia': 'AUS', 'Egypt': 'EGY', 'Switzerland': 'SUI',
+  'Algeria': 'ALG', 'Colombia': 'COL', 'Ghana': 'GHA',
+  'Korea Republic': 'KOR', 'Korea, Republic of': 'KOR'
+};
+/* Also build a reverse TLA map from our codes */
+const TLA_MAP = {};
+for (const code of Object.keys(TEAMS)) TLA_MAP[code] = code;
+TLA_MAP['BOS'] = 'BIH'; TLA_MAP['CRC'] = 'CIV'; TLA_MAP['KOR'] = 'KOR';
+TLA_MAP['RSA'] = 'RSA'; TLA_MAP['SUI'] = 'SUI'; TLA_MAP['PAR'] = 'PAR';
+
+function resolveApiTeam(apiTeam) {
+  if (!apiTeam) return null;
+  if (apiTeam.tla && TLA_MAP[apiTeam.tla]) return TLA_MAP[apiTeam.tla];
+  if (apiTeam.tla && TEAMS[apiTeam.tla]) return apiTeam.tla;
+  if (apiTeam.name && NAME_MAP[apiTeam.name]) return NAME_MAP[apiTeam.name];
+  if (apiTeam.shortName && NAME_MAP[apiTeam.shortName]) return NAME_MAP[apiTeam.shortName];
+  return apiTeam.tla || null;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 5: MATCH DEFINITIONS & BRACKET TREE
+   ═══════════════════════════════════════════════════════════════════════ */
+const MATCH_DEFS = {
+  /* ── R32 left bracket ── */
+  M1:  { home:'GER', away:'PAR', homeSlot:null, awaySlot:null, winnerSlot:'W1',  loserSlot:null, round:'R32' },
+  M2:  { home:'RSA', away:'CAN', homeSlot:null, awaySlot:null, winnerSlot:'W2',  loserSlot:null, round:'R32' },
+  M3:  { home:'FRA', away:'SWE', homeSlot:null, awaySlot:null, winnerSlot:'W3',  loserSlot:null, round:'R32' },
+  M4:  { home:'NED', away:'MAR', homeSlot:null, awaySlot:null, winnerSlot:'W4',  loserSlot:null, round:'R32' },
+  M5:  { home:'POR', away:'CRO', homeSlot:null, awaySlot:null, winnerSlot:'W5',  loserSlot:null, round:'R32' },
+  M6:  { home:'ESP', away:'AUT', homeSlot:null, awaySlot:null, winnerSlot:'W6',  loserSlot:null, round:'R32' },
+  M7:  { home:'USA', away:'BIH', homeSlot:null, awaySlot:null, winnerSlot:'W7',  loserSlot:null, round:'R32' },
+  M8:  { home:'BEL', away:'SEN', homeSlot:null, awaySlot:null, winnerSlot:'W8',  loserSlot:null, round:'R32' },
+  /* ── R32 right bracket ── */
+  M9:  { home:'BRA', away:'JPN', homeSlot:null, awaySlot:null, winnerSlot:'W9',  loserSlot:null, round:'R32' },
+  M10: { home:'CIV', away:'NOR', homeSlot:null, awaySlot:null, winnerSlot:'W10', loserSlot:null, round:'R32' },
+  M11: { home:'MEX', away:'ECU', homeSlot:null, awaySlot:null, winnerSlot:'W11', loserSlot:null, round:'R32' },
+  M12: { home:'ENG', away:'COD', homeSlot:null, awaySlot:null, winnerSlot:'W12', loserSlot:null, round:'R32' },
+  M13: { home:'ARG', away:'CPV', homeSlot:null, awaySlot:null, winnerSlot:'W13', loserSlot:null, round:'R32' },
+  M14: { home:'AUS', away:'EGY', homeSlot:null, awaySlot:null, winnerSlot:'W14', loserSlot:null, round:'R32' },
+  M15: { home:'SUI', away:'ALG', homeSlot:null, awaySlot:null, winnerSlot:'W15', loserSlot:null, round:'R32' },
+  M16: { home:'COL', away:'GHA', homeSlot:null, awaySlot:null, winnerSlot:'W16', loserSlot:null, round:'R32' },
+  /* ── R16 ── */
+  M17: { home:null, away:null, homeSlot:'W1',  awaySlot:'W2',  winnerSlot:'W17', loserSlot:null, round:'R16' },
+  M18: { home:null, away:null, homeSlot:'W3',  awaySlot:'W4',  winnerSlot:'W18', loserSlot:null, round:'R16' },
+  M19: { home:null, away:null, homeSlot:'W5',  awaySlot:'W6',  winnerSlot:'W19', loserSlot:null, round:'R16' },
+  M20: { home:null, away:null, homeSlot:'W7',  awaySlot:'W8',  winnerSlot:'W20', loserSlot:null, round:'R16' },
+  M21: { home:null, away:null, homeSlot:'W9',  awaySlot:'W10', winnerSlot:'W21', loserSlot:null, round:'R16' },
+  M22: { home:null, away:null, homeSlot:'W11', awaySlot:'W12', winnerSlot:'W22', loserSlot:null, round:'R16' },
+  M23: { home:null, away:null, homeSlot:'W13', awaySlot:'W14', winnerSlot:'W23', loserSlot:null, round:'R16' },
+  M24: { home:null, away:null, homeSlot:'W15', awaySlot:'W16', winnerSlot:'W24', loserSlot:null, round:'R16' },
+  /* ── QF ── */
+  M25: { home:null, away:null, homeSlot:'W17', awaySlot:'W18', winnerSlot:'W25', loserSlot:null, round:'QF' },
+  M26: { home:null, away:null, homeSlot:'W19', awaySlot:'W20', winnerSlot:'W26', loserSlot:null, round:'QF' },
+  M27: { home:null, away:null, homeSlot:'W21', awaySlot:'W22', winnerSlot:'W27', loserSlot:null, round:'QF' },
+  M28: { home:null, away:null, homeSlot:'W23', awaySlot:'W24', winnerSlot:'W28', loserSlot:null, round:'QF' },
+  /* ── SF ── */
+  M29: { home:null, away:null, homeSlot:'W25', awaySlot:'W26', winnerSlot:'W29', loserSlot:'L29', round:'SF' },
+  M30: { home:null, away:null, homeSlot:'W27', awaySlot:'W28', winnerSlot:'W30', loserSlot:'L30', round:'SF' },
+  /* ── Final ── */
+  M31: { home:null, away:null, homeSlot:'W29', awaySlot:'W30', winnerSlot:'WINNER', loserSlot:null, round:'FINAL' },
+  /* ── Third place ── */
+  M32: { home:null, away:null, homeSlot:'L29', awaySlot:'L30', winnerSlot:'THIRD', loserSlot:null, round:'3RD' }
+};
+
+const ROUND_MATCHES = {
+  R32:   ['M1','M2','M3','M4','M5','M6','M7','M8','M9','M10','M11','M12','M13','M14','M15','M16'],
+  R16:   ['M17','M18','M19','M20','M21','M22','M23','M24'],
+  QF:    ['M25','M26','M27','M28'],
+  SF:    ['M29','M30'],
+  FINAL: ['M31'],
+  '3RD': ['M32']
+};
+
+const ROUND_ORDER = ['R32','R16','QF','SF','FINAL'];
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 6: LAYOUT STRUCTURE
+   ═══════════════════════════════════════════════════════════════════════ */
+const LAYOUT_COLUMNS = [
+  { id:'r32-l',  label:'Round of 32',    matches:['M1','M2','M3','M4','M5','M6','M7','M8'], side:'left',   cls:'' },
+  { id:'r16-l',  label:'Round of 16',    matches:['M17','M18','M19','M20'],                  side:'left',   cls:'' },
+  { id:'qf-l',   label:'Quarter-finals', matches:['M25','M26'],                               side:'left',   cls:'' },
+  { id:'sf-l',   label:'Semi-finals',    matches:['M29'],                                     side:'left',   cls:'' },
+  { id:'final',  label:'Final',          matches:['M31'],                                     side:'center', cls:'final-col' },
+  { id:'sf-r',   label:'Semi-finals',    matches:['M30'],                                     side:'right',  cls:'' },
+  { id:'qf-r',   label:'Quarter-finals', matches:['M27','M28'],                               side:'right',  cls:'' },
+  { id:'r16-r',  label:'Round of 16',    matches:['M21','M22','M23','M24'],                  side:'right',  cls:'' },
+  { id:'r32-r',  label:'Round of 32',    matches:['M9','M10','M11','M12','M13','M14','M15','M16'], side:'right', cls:'' }
+];
+
+const CONNECTOR_DEFS = [
+  /* Left side: R32 → R16 */
+  { sources:['M1','M2'],   target:'M17', side:'left' },
+  { sources:['M3','M4'],   target:'M18', side:'left' },
+  { sources:['M5','M6'],   target:'M19', side:'left' },
+  { sources:['M7','M8'],   target:'M20', side:'left' },
+  /* Left: R16 → QF */
+  { sources:['M17','M18'], target:'M25', side:'left' },
+  { sources:['M19','M20'], target:'M26', side:'left' },
+  /* Left: QF → SF */
+  { sources:['M25','M26'], target:'M29', side:'left' },
+  /* Right side: R32 → R16 */
+  { sources:['M9','M10'],  target:'M21', side:'right' },
+  { sources:['M11','M12'], target:'M22', side:'right' },
+  { sources:['M13','M14'], target:'M23', side:'right' },
+  { sources:['M15','M16'], target:'M24', side:'right' },
+  /* Right: R16 → QF */
+  { sources:['M21','M22'], target:'M27', side:'right' },
+  { sources:['M23','M24'], target:'M28', side:'right' },
+  /* Right: QF → SF */
+  { sources:['M27','M28'], target:'M30', side:'right' },
+  /* SF → Final (1:1) */
+  { sources:['M29'], target:'M31', side:'left' },
+  { sources:['M30'], target:'M31', side:'right' }
+];
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 7: BRACKET STATE
+   ═══════════════════════════════════════════════════════════════════════ */
+const bracket = { matches: {}, slots: {} };
+
+function initBracketState() {
+  // Initialise slots
+  for (const [mid, def] of Object.entries(MATCH_DEFS)) {
+    if (def.winnerSlot) bracket.slots[def.winnerSlot] = null;
+    if (def.loserSlot)  bracket.slots[def.loserSlot]  = null;
+  }
+  // Initialise matches
+  for (const [mid, def] of Object.entries(MATCH_DEFS)) {
+    bracket.matches[mid] = {
+      home: def.home, away: def.away,
+      homeScore: null, awayScore: null,
+      winner: null, status: 'SCHEDULED'
+    };
+  }
+}
+
+function getTeamForSide(matchId, side) {
+  const m = bracket.matches[matchId];
+  const def = MATCH_DEFS[matchId];
+  if (side === 'home') return m.home || bracket.slots[def.homeSlot] || null;
+  return m.away || bracket.slots[def.awaySlot] || null;
+}
+
+function getSlotLabel(matchId, side) {
+  const def = MATCH_DEFS[matchId];
+  const slot = side === 'home' ? def.homeSlot : def.awaySlot;
+  if (!slot) return null;
+  return slot; // e.g. "W1" → display as "W M1"
+}
+
+function formatSlotLabel(slot) {
+  if (!slot) return '—';
+  const m = slot.replace('W','').replace('L','');
+  const prefix = slot.startsWith('L') ? 'L' : 'W';
+  return prefix + ' M' + m;
+}
+
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 8: EVIDENCE STACKING PREDICTION ENGINE
+   ═══════════════════════════════════════════════════════════════════════ */
+const probCache = new Map();
+
+/**
+ * Computes an "effective Elo" for a team.
+ * Starts at the prior Elo and gets nudged by in-tournament evidence.
+ *
+ * Prior Elo alone produces correct spread (Brazil 2082 vs Cape Verde 1640 → ~93%).
+ * Each match played shifts the effective Elo by up to ±150 points based on:
+ *   - Weighted goal/xG differential per game
+ *   - Clean sheets
+ *   - Shot efficiency
+ *   - Quality of opponents beaten (path difficulty)
+ *   - Momentum (dominant last match gets an extra +20 Elo)
+ *
+ * This way: zero data → pure Elo (good spread).
+ *            More data → Elo gets nudged by actual in-tournament performance.
+ */
+function computeEffectiveEloDetails(code) {
+  const base = TEAM_RATINGS[code]?.elo || 1750;
+  const s = teamStats[code];
+  if (!s || s.matchesPlayed === 0) return { base, perfAdj: 0, pathAdj: 0, momentumAdj: 0, effectiveElo: base };
+
+  // --- Layer 1: In-tournament performance (up to ±150 Elo) ---
+  const diffFor    = s.xGFor > 0 ? s.xGFor : s.goalsFor;
+  const diffAg     = s.xGAgainst > 0 ? s.xGAgainst : s.goalsAgainst;
+  const perfDiff   = (diffFor - diffAg) / s.matchesPlayed;   // goals/xG diff per game
+  const csRate     = s.cleanSheets / s.matchesPlayed;         // 0–1
+  const efficiency = s.shotsOnTarget > 0
+    ? (s.goalsFor / s.shotsOnTarget) - 0.33   // deviation from average conversion
+    : 0;
+
+  // Combine into a raw performance signal (-2 to +2 range typically)
+  // perfDiff: ~-2 to +2,  csRate: 0-1,  efficiency: ~-0.33 to +0.67
+  const rawPerf = perfDiff * 0.6 + csRate * 0.25 + efficiency * 0.15;
+
+  // Weight most recent match 2× the rest
+  const weightedPerf = rawPerf * s.lastMatchWeight;
+
+  // Scale to ±150 Elo points
+  const perfEloAdj = Math.max(-150, Math.min(150, weightedPerf * 60));
+
+  // --- Layer 2: Path difficulty (up to +40 Elo) ---
+  let pathAdj = 0;
+  if (s.opponentsBeaten.length > 0) {
+    const avgOppElo = s.opponentsBeaten.reduce(
+      (a, c) => a + (TEAM_RATINGS[c]?.elo || 1750), 0
+    ) / s.opponentsBeaten.length;
+    // If avg beaten opponent Elo > 1800, reward up to +40; below 1600, slight penalty
+    pathAdj = (avgOppElo - 1800) / 10;      // e.g. avg=2000 → +20, avg=1600 → -20
+    pathAdj = Math.max(-20, Math.min(40, pathAdj));
+  }
+
+  // --- Layer 3: Momentum bonus ---
+  const momentumAdj = s.inForm ? 20 : 0;
+
+  const effectiveElo = base + perfEloAdj + pathAdj + momentumAdj;
+  return {
+    base,
+    perfAdj: perfEloAdj,
+    pathAdj: pathAdj,
+    momentumAdj: momentumAdj,
+    effectiveElo: Math.max(1200, effectiveElo) // floor at 1200
+  };
+}
+
+function computeEffectiveElo(code) {
+  return computeEffectiveEloDetails(code).effectiveElo;
+}
+
+/**
+ * Standard Elo win probability:  1 / (1 + 10^((eloB - eloA) / 400))
+ * A 200-point gap → ~76% favourite.  400-point gap → ~91%.
+ */
+function getWinProbability(teamA, teamB) {
+  if (!TEAM_RATINGS[teamA] || !TEAM_RATINGS[teamB]) return { pA: 0.5, pB: 0.5 };
+  const key = teamA + '-' + teamB;
+  if (probCache.has(key)) return probCache.get(key);
+
+  const eloA = computeEffectiveElo(teamA);
+  const eloB = computeEffectiveElo(teamB);
+
+  const pA = 1 / (1 + Math.pow(10, (eloB - eloA) / 400));
+  const pB = 1 - pA;
+
+  const result = { pA, pB };
+  probCache.set(key, result);
+  return result;
+}
+
+function clearProbCache() { probCache.clear(); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 9: (DEPRECATED - RATING UPDATES HANDLED IN API PARSER)
+   ═══════════════════════════════════════════════════════════════════════ */
+// Elo dynamic updates removed in favor of Evidence Stacking
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 10: MONTE CARLO TOURNAMENT SIMULATION
+   ═══════════════════════════════════════════════════════════════════════ */
+window.tournamentProbs = {};
+
+function simulateTournament(N) {
+  N = N || CONFIG.MONTE_CARLO_N;
+  const winCounts = {};
+
+  for (let sim = 0; sim < N; sim++) {
+    const simSlots = Object.assign({}, bracket.slots);
+
+    for (const round of ROUND_ORDER) {
+      for (const matchId of ROUND_MATCHES[round]) {
+        const def = MATCH_DEFS[matchId];
+        const m   = bracket.matches[matchId];
+        const homeTeam = def.home || simSlots[def.homeSlot];
+        const awayTeam = def.away || simSlots[def.awaySlot];
+        if (!homeTeam || !awayTeam) continue;
+
+        let winner, loser;
+        if (m.winner) {
+          winner = m.winner;
+          loser  = (winner === homeTeam) ? awayTeam : homeTeam;
+        } else {
+          const { pA } = getWinProbability(homeTeam, awayTeam);
+          if (Math.random() < pA) { winner = homeTeam; loser = awayTeam; }
+          else { winner = awayTeam; loser = homeTeam; }
+        }
+        if (def.winnerSlot) simSlots[def.winnerSlot] = winner;
+        if (def.loserSlot)  simSlots[def.loserSlot]  = loser;
+      }
+    }
+
+    const tw = simSlots['WINNER'];
+    if (tw) winCounts[tw] = (winCounts[tw] || 0) + 1;
+  }
+
+  const probs = {};
+  for (const [team, count] of Object.entries(winCounts)) probs[team] = count / N;
+  window.tournamentProbs = probs;
+  return probs;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 10b: PREDICTION FILL — populate bracket with most likely teams
+   ═══════════════════════════════════════════════════════════════════════ */
+window.predictedSlots = {};
+
+function fillPredictions() {
+  clearProbCache();
+  const predicted = {};
+
+  // Seed with confirmed slots
+  for (const [key, val] of Object.entries(bracket.slots)) {
+    if (val) predicted[key] = val;
+  }
+
+  // Walk each round in order, predicting winners for unresolved matches
+  for (const round of [...ROUND_ORDER, '3RD']) {
+    const matchIds = ROUND_MATCHES[round];
+    if (!matchIds) continue;
+    for (const matchId of matchIds) {
+      const def = MATCH_DEFS[matchId];
+      const m   = bracket.matches[matchId];
+
+      const homeTeam = def.home || predicted[def.homeSlot] || null;
+      const awayTeam = def.away || predicted[def.awaySlot] || null;
+
+      if (m.winner) {
+        // Confirmed result — propagate actual winner
+        if (def.winnerSlot) predicted[def.winnerSlot] = m.winner;
+        if (def.loserSlot) {
+          predicted[def.loserSlot] = (m.winner === homeTeam) ? awayTeam : homeTeam;
+        }
+      } else if (homeTeam && awayTeam && TEAM_RATINGS[homeTeam] && TEAM_RATINGS[awayTeam]) {
+        // No result yet — predict using Evidence Stacking model
+        const { pA } = getWinProbability(homeTeam, awayTeam);
+        const winner = pA >= 0.5 ? homeTeam : awayTeam;
+        const loser  = pA >= 0.5 ? awayTeam : homeTeam;
+        if (def.winnerSlot) predicted[def.winnerSlot] = winner;
+        if (def.loserSlot)  predicted[def.loserSlot]  = loser;
+      }
+    }
+  }
+
+  window.predictedSlots = predicted;
+}
+
+/**
+ * Returns { code, predicted } for a team in a match slot.
+ * `predicted` is true if the team comes from the prediction fill rather than a confirmed result.
+ */
+function getTeamInfo(matchId, side) {
+  const m   = bracket.matches[matchId];
+  const def = MATCH_DEFS[matchId];
+  const slotKey = side === 'home' ? def.homeSlot : def.awaySlot;
+
+  // Direct assignment (R32 matches have teams hard-coded)
+  const direct = side === 'home' ? m.home : m.away;
+  if (direct) return { code: direct, predicted: false };
+
+  // Confirmed slot resolution
+  if (slotKey && bracket.slots[slotKey]) return { code: bracket.slots[slotKey], predicted: false };
+
+  // Predicted slot resolution
+  if (slotKey && window.predictedSlots[slotKey]) return { code: window.predictedSlots[slotKey], predicted: true };
+
+  return null;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 11: DOM REFERENCES
+   ═══════════════════════════════════════════════════════════════════════ */
+const cardEls = {}; // matchId → { root, badge, barFill, homeRow, awayRow, homeName, awayName, homeScore, awayScore, homeFlag, awayFlag, ftTag }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 12: RENDERING — BUILD BRACKET
+   ═══════════════════════════════════════════════════════════════════════ */
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function buildMatchCard(matchId) {
+  const def = MATCH_DEFS[matchId];
+  const slot = el('div', 'match-slot');
+  slot.id = 'slot-' + matchId;
+
+  // Prediction badge
+  const badge = el('div', 'prediction-badge');
+  const pill  = el('span', 'badge-pill badge-grey', '—');
+  badge.appendChild(pill);
+  slot.appendChild(badge);
+
+  // Probability bar
+  const barWrap = el('div', 'prob-bar');
+  const barFill = el('div', 'prob-bar-fill bar-grey');
+  barFill.style.width = '0%';
+  barWrap.appendChild(barFill);
+  slot.appendChild(barWrap);
+
+  // Card body
+  const card = el('div', 'match-card');
+  card.id = 'card-' + matchId;
+  card.dataset.matchId = matchId;
+
+  function makeRow(side) {
+    const row   = el('div', 'team-row');
+    row.dataset.side = side;
+    const flagImg = document.createElement('img');
+    flagImg.className = 'team-flag-img flag-placeholder';
+    flagImg.width  = 20;
+    flagImg.height = 14;
+    const name  = el('span', 'team-name', '—');
+    const score = el('span', 'team-score', '—');
+    row.appendChild(flagImg);
+    row.appendChild(name);
+    row.appendChild(score);
+    return { row, flagImg, name, score };
+  }
+
+  const homeEls = makeRow('home');
+  const awayEls = makeRow('away');
+  card.appendChild(homeEls.row);
+  card.appendChild(awayEls.row);
+
+  // FT tag
+  const ft = el('div', 'ft-tag', 'FT');
+  card.appendChild(ft);
+  slot.appendChild(card);
+
+  // Card hover → show match insight panel
+  card.addEventListener('mouseenter', () => showMatchInsight(matchId, card));
+  card.addEventListener('mouseleave', hideMatchInsight);
+
+  cardEls[matchId] = {
+    root: slot, card: card, badge: pill, barFill: barFill,
+    homeRow: homeEls.row, awayRow: awayEls.row,
+    homeName: homeEls.name, awayName: awayEls.name,
+    homeScore: homeEls.score, awayScore: awayEls.score,
+    homeFlag: homeEls.flagImg, awayFlag: awayEls.flagImg,
+    ftTag: ft
+  };
+
+  return slot;
+}
+
+function buildBracket() {
+  const wrapper = document.getElementById('bracket-wrapper');
+  wrapper.innerHTML = '';
+
+  // Round headers
+  const headers = el('div', 'round-headers');
+  for (const col of LAYOUT_COLUMNS) {
+    const h = el('div', 'round-header' + (col.cls === 'final-col' ? ' final-header' : ''), col.label);
+    h.style.width = col.cls === 'final-col' ? '190px' : '170px';
+    h.title = 'Click to scroll to ' + col.label;
+    h.addEventListener('click', () => {
+      const colEl = document.getElementById('col-' + col.id);
+      if (colEl) {
+        colEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      }
+    });
+    headers.appendChild(h);
+  }
+  wrapper.appendChild(headers);
+
+  // Bracket container
+  const bracketEl = el('div', 'bracket');
+  bracketEl.id = 'bracket';
+
+  for (const col of LAYOUT_COLUMNS) {
+    const column = el('div', 'bracket-column' + (col.cls ? ' ' + col.cls : ''));
+    column.id = 'col-' + col.id;
+
+    // Mobile round label
+    const mobileLabel = el('div', 'mobile-round-label', col.label);
+    column.appendChild(mobileLabel);
+
+
+
+    for (const matchId of col.matches) {
+      column.appendChild(buildMatchCard(matchId));
+    }
+
+    // Third-place match under final column
+    if (col.id === 'final') {
+      // Third-place section
+      const tpSection = el('div', 'third-place-section');
+      const tpLabel = el('div', 'third-place-label', 'Third-place match');
+      tpSection.appendChild(tpLabel);
+      tpSection.appendChild(buildMatchCard('M32'));
+      column.appendChild(tpSection);
+    }
+
+    bracketEl.appendChild(column);
+  }
+
+  // SVG connector overlay
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.id = 'connectors';
+  bracketEl.appendChild(svg);
+
+  wrapper.appendChild(bracketEl);
+
+  // Fill predictions and render
+  fillPredictions();
+  updateAllCards();
+  // Defer connector drawing until layout settles
+  requestAnimationFrame(() => requestAnimationFrame(drawConnectors));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 13: RENDERING — UPDATE CARDS
+   ═══════════════════════════════════════════════════════════════════════ */
+function updateMatchCard(matchId) {
+  const m   = bracket.matches[matchId];
+  const def = MATCH_DEFS[matchId];
+  const ce  = cardEls[matchId];
+  if (!ce) return;
+
+  // Resolve teams — includes predicted teams for future rounds
+  const homeInfo = getTeamInfo(matchId, 'home');
+  const awayInfo = getTeamInfo(matchId, 'away');
+  const homeTeam = homeInfo ? homeInfo.code : null;
+  const awayTeam = awayInfo ? awayInfo.code : null;
+
+  // Determine predicted winner for unresolved matches
+  let predWinner = null;
+  if (!m.winner && homeTeam && awayTeam && TEAM_RATINGS[homeTeam] && TEAM_RATINGS[awayTeam]) {
+    const { pA } = getWinProbability(homeTeam, awayTeam);
+    predWinner = pA >= 0.5 ? homeTeam : awayTeam;
+  }
+
+  // Home row
+  ce.homeRow.classList.remove('predicted', 'pred-winner');
+  if (homeTeam && TEAMS[homeTeam]) {
+    setFlagImg(ce.homeFlag, homeTeam);
+    ce.homeName.textContent = TEAMS[homeTeam].name;
+    ce.homeName.classList.remove('placeholder');
+    if (homeInfo.predicted) ce.homeRow.classList.add('predicted');
+    if (!m.winner && predWinner === homeTeam) ce.homeRow.classList.add('pred-winner');
+    ce.homeRow.classList.remove('clickable');
+    ce.homeRow.onclick = null;
+  } else {
+    setFlagImg(ce.homeFlag, null);
+    const sl = getSlotLabel(matchId, 'home');
+    ce.homeName.textContent = sl ? formatSlotLabel(sl) : '—';
+    ce.homeName.classList.add('placeholder');
+    ce.homeRow.classList.remove('clickable');
+    ce.homeRow.onclick = null;
+  }
+
+  // Away row
+  ce.awayRow.classList.remove('predicted', 'pred-winner');
+  if (awayTeam && TEAMS[awayTeam]) {
+    setFlagImg(ce.awayFlag, awayTeam);
+    ce.awayName.textContent = TEAMS[awayTeam].name;
+    ce.awayName.classList.remove('placeholder');
+    if (awayInfo.predicted) ce.awayRow.classList.add('predicted');
+    if (!m.winner && predWinner === awayTeam) ce.awayRow.classList.add('pred-winner');
+    ce.awayRow.classList.remove('clickable');
+    ce.awayRow.onclick = null;
+  } else {
+    setFlagImg(ce.awayFlag, null);
+    const sl = getSlotLabel(matchId, 'away');
+    ce.awayName.textContent = sl ? formatSlotLabel(sl) : '—';
+    ce.awayName.classList.add('placeholder');
+    ce.awayRow.classList.remove('clickable');
+    ce.awayRow.onclick = null;
+  }
+
+  // Scores
+  ce.homeScore.textContent = m.homeScore !== null ? m.homeScore : '—';
+  ce.awayScore.textContent = m.awayScore !== null ? m.awayScore : '—';
+
+  // Winner / eliminated styling
+  ce.homeRow.classList.remove('winner', 'eliminated');
+  ce.awayRow.classList.remove('winner', 'eliminated');
+  if (m.winner && homeTeam && awayTeam) {
+    if (m.winner === homeTeam) { ce.homeRow.classList.add('winner'); ce.awayRow.classList.add('eliminated'); }
+    else                       { ce.awayRow.classList.add('winner'); ce.homeRow.classList.add('eliminated'); }
+  }
+
+  // In-play card glow
+  ce.card.classList.toggle('in-play', m.status === 'IN_PLAY' || m.status === 'PAUSED');
+
+  // FT tag
+  ce.ftTag.classList.toggle('visible', m.status === 'FINISHED');
+
+  // Prediction badge & bar
+  if (homeTeam && awayTeam && TEAM_RATINGS[homeTeam] && TEAM_RATINGS[awayTeam]) {
+    const { pA, pB } = getWinProbability(homeTeam, awayTeam);
+    const fav = pA >= pB ? homeTeam : awayTeam;
+    const pct = Math.round(Math.max(pA, pB) * 100);
+    ce.badge.textContent = (TEAMS[fav] ? fav : '???') + ' ' + pct + '%';
+
+    let badgeCls, barCls;
+    if (pct > 60)      { badgeCls = 'badge-pill badge-blue';  barCls = 'prob-bar-fill bar-blue'; }
+    else if (pct >= 50) { badgeCls = 'badge-pill badge-amber'; barCls = 'prob-bar-fill bar-amber'; }
+    else                { badgeCls = 'badge-pill badge-grey';  barCls = 'prob-bar-fill bar-grey'; }
+
+    ce.badge.className = badgeCls;
+    ce.barFill.className = barCls;
+    ce.barFill.style.width = pct + '%';
+  } else {
+    ce.badge.textContent = '—';
+    ce.badge.className = 'badge-pill badge-grey';
+    ce.barFill.style.width = '0%';
+  }
+}
+
+function updateAllCards() {
+  for (const matchId of Object.keys(MATCH_DEFS)) {
+    updateMatchCard(matchId);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 14: SVG CONNECTORS
+   ═══════════════════════════════════════════════════════════════════════ */
+function drawConnectors() {
+  const svg = document.getElementById('connectors');
+  if (!svg) return;
+  const bracketEl = document.getElementById('bracket');
+  if (!bracketEl) return;
+
+  // Clear
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+  const bRect = bracketEl.getBoundingClientRect();
+  svg.setAttribute('width', bracketEl.scrollWidth);
+  svg.setAttribute('height', bracketEl.scrollHeight);
+  svg.style.width  = bracketEl.scrollWidth + 'px';
+  svg.style.height = bracketEl.scrollHeight + 'px';
+
+  const svgNS = 'http://www.w3.org/2000/svg';
+
+  function getCardCenter(matchId) {
+    const card = document.getElementById('card-' + matchId);
+    if (!card) return null;
+    const r = card.getBoundingClientRect();
+    return {
+      left: r.left - bRect.left, right: r.right - bRect.left,
+      top: r.top - bRect.top, bottom: r.bottom - bRect.top,
+      cy: r.top - bRect.top + r.height / 2,
+      cx: r.left - bRect.left + r.width / 2
+    };
+  }
+
+  function line(x1, y1, x2, y2) {
+    const l = document.createElementNS(svgNS, 'line');
+    l.setAttribute('x1', x1); l.setAttribute('y1', y1);
+    l.setAttribute('x2', x2); l.setAttribute('y2', y2);
+    l.setAttribute('stroke', '#1e1e1e');
+    l.setAttribute('stroke-width', '1');
+    svg.appendChild(l);
+  }
+
+  for (const conn of CONNECTOR_DEFS) {
+    const tPos = getCardCenter(conn.target);
+    if (!tPos) continue;
+
+    if (conn.sources.length === 2) {
+      const s1 = getCardCenter(conn.sources[0]);
+      const s2 = getCardCenter(conn.sources[1]);
+      if (!s1 || !s2) continue;
+
+      if (conn.side === 'left') {
+        const midX = (Math.max(s1.right, s2.right) + tPos.left) / 2;
+        line(s1.right, s1.cy, midX, s1.cy);
+        line(s2.right, s2.cy, midX, s2.cy);
+        line(midX, s1.cy, midX, s2.cy);
+        line(midX, tPos.cy, tPos.left, tPos.cy);
+      } else {
+        const midX = (Math.min(s1.left, s2.left) + tPos.right) / 2;
+        line(s1.left, s1.cy, midX, s1.cy);
+        line(s2.left, s2.cy, midX, s2.cy);
+        line(midX, s1.cy, midX, s2.cy);
+        line(midX, tPos.cy, tPos.right, tPos.cy);
+      }
+    } else if (conn.sources.length === 1) {
+      // 1:1 connection (SF → Final)
+      const s = getCardCenter(conn.sources[0]);
+      if (!s) continue;
+      if (conn.side === 'left') {
+        line(s.right, s.cy, tPos.left, tPos.cy);
+      } else {
+        line(s.left, s.cy, tPos.right, tPos.cy);
+      }
+    }
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 15: MATCH INSIGHT PANEL
+   ═══════════════════════════════════════════════════════════════════════ */
+
+function getTeamPath(teamCode) {
+  const path = [];
+  for (const [mid, m] of Object.entries(bracket.matches)) {
+    if (m.status !== 'FINISHED') continue;
+    const home = getTeamForSide(mid, 'home');
+    const away = getTeamForSide(mid, 'away');
+    if (home === teamCode) {
+      path.push({ vs: away, scoreFor: m.homeScore, scoreAg: m.awayScore, won: m.winner === teamCode, round: MATCH_DEFS[mid].round });
+    } else if (away === teamCode) {
+      path.push({ vs: home, scoreFor: m.awayScore, scoreAg: m.homeScore, won: m.winner === teamCode, round: MATCH_DEFS[mid].round });
+    }
+  }
+  return path;
+}
+
+let _insightHideTimer = null;
+
+function hideMatchInsight() {
+  const panel = document.getElementById('match-insight');
+  if (!panel) return;
+  panel.classList.remove('visible');
+  _insightHideTimer = setTimeout(() => { panel.style.display = 'none'; }, 200);
+}
+
+function showMatchInsight(matchId, cardEl) {
+  clearTimeout(_insightHideTimer);
+  const panel = document.getElementById('match-insight');
+  if (!panel) return;
+
+  const m   = bracket.matches[matchId];
+  const def = MATCH_DEFS[matchId];
+  const homeInfo = getTeamInfo(matchId, 'home');
+  const awayInfo = getTeamInfo(matchId, 'away');
+  const homeCode = homeInfo ? homeInfo.code : null;
+  const awayCode = awayInfo ? awayInfo.code : null;
+
+  if (!homeCode || !awayCode || !TEAMS[homeCode] || !TEAMS[awayCode]) {
+    hideMatchInsight();
+    return;
+  }
+
+  const { pA, pB } = getWinProbability(homeCode, awayCode);
+  const pctA = Math.round(pA * 100);
+  const pctB = Math.round(pB * 100);
+
+  const sA = teamStats[homeCode] || {};
+  const sB = teamStats[awayCode] || {};
+
+  const homeWon = m.winner === homeCode;
+  const awayWon = m.winner === awayCode;
+  const isLive  = m.status === 'IN_PLAY' || m.status === 'PAUSED';
+  const isFT    = m.status === 'FINISHED';
+  const homeIsPred = homeInfo.predicted;
+  const awayIsPred = awayInfo.predicted;
+
+  const twA = window.tournamentProbs?.[homeCode];
+  const twB = window.tournamentProbs?.[awayCode];
+
+  const statusLabel = isFT ? 'Full time' : isLive ? 'Live' : (homeIsPred || awayIsPred ? 'Predicted matchup' : 'Upcoming');
+  const statusCls   = isFT ? 'ft' : isLive ? 'live' : '';
+
+  const flagSrcA = flagUrl(homeCode);
+  const flagSrcB = flagUrl(awayCode);
+
+  const scoreA = m.homeScore !== null ? m.homeScore : '';
+  const scoreB = m.awayScore !== null ? m.awayScore : '';
+  const showScore = isFT || isLive;
+
+  // Format group form line: "3W 0D 0L"
+  function formLine(s) {
+    if (!s || s.matchesPlayed === 0) return '';
+    return `<span class="fw">${s.wins}W</span> <span class="fd">${s.draws}D</span> <span class="fl">${s.losses}L</span>`;
+  }
+
+  // Format match date
+  let dateStr = '';
+  if (m.utcDate) {
+    try {
+      const d = new Date(m.utcDate);
+      dateStr = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ', ' +
+                d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
+    } catch(_) {}
+  }
+
+  // --- Build HTML ---
+  let html = `
+    <div class="mi-header">
+      <span class="mi-round-label">${def.round || 'Match'}</span>
+      <span class="mi-status-tag ${statusCls}">${statusLabel}</span>
+    </div>`;
+
+  if (dateStr) {
+    html += `<div class="mi-date-row">${dateStr}</div>`;
+  }
+
+  const formA = formLine(sA);
+  const formB = formLine(sB);
+
+  html += `
+    <div class="mi-vs-row">
+      <div class="mi-team">
+        <div class="mi-flag-wrap"><img src="${flagSrcA}" alt="${TEAMS[homeCode].name}"></div>
+        <div class="mi-team-name ${homeWon ? 'is-winner' : ''} ${homeIsPred ? 'predicted-style' : ''}">${TEAMS[homeCode].name}</div>
+        ${formA ? `<div class="mi-form-line">${formA}</div>` : ''}
+        ${twA !== undefined ? `<div style="font-size:9px;color:#333">${(twA*100).toFixed(1)}% to win tournament</div>` : ''}
+      </div>
+
+      <div style="flex-shrink:0;text-align:center">
+        ${showScore
+          ? `<div class="mi-score-big">${scoreA}<span class="mi-score-sep"> – </span>${scoreB}</div>`
+          : `<div class="mi-vs-label">vs</div>`
+        }
+      </div>
+
+      <div class="mi-team away">
+        <div class="mi-flag-wrap"><img src="${flagSrcB}" alt="${TEAMS[awayCode].name}"></div>
+        <div class="mi-team-name ${awayWon ? 'is-winner' : ''} ${awayIsPred ? 'predicted-style' : ''}">${TEAMS[awayCode].name}</div>
+        ${formB ? `<div class="mi-form-line">${formB}</div>` : ''}
+        ${twB !== undefined ? `<div style="font-size:9px;color:#333">${(twB*100).toFixed(1)}% to win tournament</div>` : ''}
+      </div>
+    </div>`;
+
+  // Probability bar (only for unfinished matches)
+  if (!isFT) {
+    html += `
+    <div class="mi-prob-section">
+      <div class="mi-prob-bar-wrap">
+        <div class="mi-prob-bar-a" style="width:${pctA}%"></div>
+        <div class="mi-prob-bar-b" style="width:${pctB}%"></div>
+      </div>
+      <div class="mi-prob-labels">
+        <span class="prob-a">${pctA}%</span>
+        <span style="color:#2a2a2a;font-size:9px">win probability</span>
+        <span class="prob-b">${pctB}%</span>
+      </div>
+    </div>`;
+  }
+
+  // --- Comparison table ---
+  const eloDetA = computeEffectiveEloDetails(homeCode);
+  const eloDetB = computeEffectiveEloDetails(awayCode);
+  const eloA = eloDetA.effectiveElo;
+  const eloB = eloDetB.effectiveElo;
+  
+  const baseEloA = TEAM_RATINGS[homeCode]?.elo || 1750;
+  const baseEloB = TEAM_RATINGS[awayCode]?.elo || 1750;
+  const gpgA = sA.matchesPlayed > 0 ? (sA.goalsFor / sA.matchesPlayed).toFixed(1) : '–';
+  const gpgB = sB.matchesPlayed > 0 ? (sB.goalsFor / sB.matchesPlayed).toFixed(1) : '–';
+  const gcgA = sA.matchesPlayed > 0 ? (sA.goalsAgainst / sA.matchesPlayed).toFixed(1) : '–';
+  const gcgB = sB.matchesPlayed > 0 ? (sB.goalsAgainst / sB.matchesPlayed).toFixed(1) : '–';
+  const csrA = sA.matchesPlayed > 0 ? Math.round(sA.cleanSheets / sA.matchesPlayed * 100) + '%' : '–';
+  const csrB = sB.matchesPlayed > 0 ? Math.round(sB.cleanSheets / sB.matchesPlayed * 100) + '%' : '–';
+
+  // Effective Elo display
+  const eloDispA = Math.round(eloA);
+  const eloDispB = Math.round(eloB);
+  const adjA = Math.round(eloA - baseEloA);
+  const adjB = Math.round(eloB - baseEloB);
+  const eloStrA = eloDispA + (adjA !== 0 ? ` (${adjA > 0 ? '+' : ''}${adjA})` : '');
+  const eloStrB = eloDispB + (adjB !== 0 ? ` (${adjB > 0 ? '+' : ''}${adjB})` : '');
+
+  function cmpRow(valA, valB, label, rawA, rawB) {
+    // rawA/rawB for numeric comparison; valA/valB are display strings
+    const aLead = (typeof rawA === 'number' && typeof rawB === 'number' && rawA > rawB) ? ' lead' : '';
+    const bLead = (typeof rawA === 'number' && typeof rawB === 'number' && rawB > rawA) ? ' lead' : '';
+    return `<div class="mi-compare-row">
+      <span class="mi-cval${aLead}">${valA}</span>
+      <span class="mi-clabel">${label}</span>
+      <span class="mi-cval${bLead}">${valB}</span>
+    </div>`;
+  }
+
+  // For goals/game: higher is better; for conceded: lower is better
+  const gpgNA = sA.matchesPlayed > 0 ? sA.goalsFor / sA.matchesPlayed : null;
+  const gpgNB = sB.matchesPlayed > 0 ? sB.goalsFor / sB.matchesPlayed : null;
+  const gcgNA = sA.matchesPlayed > 0 ? sA.goalsAgainst / sA.matchesPlayed : null;
+  const gcgNB = sB.matchesPlayed > 0 ? sB.goalsAgainst / sB.matchesPlayed : null;
+  const csrNA = sA.matchesPlayed > 0 ? sA.cleanSheets / sA.matchesPlayed : null;
+  const csrNB = sB.matchesPlayed > 0 ? sB.cleanSheets / sB.matchesPlayed : null;
+
+  html += `<div class="mi-compare">`;
+  html += cmpRow(eloStrA, eloStrB, 'Elo rating', eloA, eloB);
+  if (sA.matchesPlayed > 0 || sB.matchesPlayed > 0) {
+    html += cmpRow(gpgA, gpgB, 'Goals / game', gpgNA, gpgNB);
+    html += cmpRow(gcgA, gcgB, 'Conceded / game', gcgNB, gcgNA); // lower is better, so flip comparison
+    html += cmpRow(csrA, csrB, 'Clean sheets', csrNA, csrNB);
+    html += cmpRow(sA.matchesPlayed, sB.matchesPlayed, 'Matches played', sA.matchesPlayed, sB.matchesPlayed);
+  }
+  html += `</div>`;
+
+  // --- Calculation Breakdown ---
+  if (sA.matchesPlayed > 0 || sB.matchesPlayed > 0) {
+    function fmtAdj(val) {
+      if (Math.abs(val) < 0.5) return '0';
+      const r = Math.round(val);
+      return `<span class="${r > 0 ? 'pos' : 'neg'}">${r > 0 ? '+'+r : r}</span>`;
+    }
+    
+    html += `
+    <div class="mi-calc-section">
+      <div class="mi-calc-title">Elo Calculation</div>
+      <div class="mi-calc-grid">
+        <div class="mi-calc-col">
+          <div class="mi-calc-row"><span class="lbl">Base Elo</span><span class="val">${Math.round(eloDetA.base)}</span></div>
+          <div class="mi-calc-row"><span class="lbl">Performance</span><span class="val">${fmtAdj(eloDetA.perfAdj)}</span></div>
+          <div class="mi-calc-row"><span class="lbl">Opponent Str.</span><span class="val">${fmtAdj(eloDetA.pathAdj)}</span></div>
+          <div class="mi-calc-row"><span class="lbl">Momentum</span><span class="val">${fmtAdj(eloDetA.momentumAdj)}</span></div>
+          <div class="mi-calc-row total"><span class="lbl">Effective Elo</span><span class="val">${Math.round(eloDetA.effectiveElo)}</span></div>
+        </div>
+        <div class="mi-calc-col">
+          <div class="mi-calc-row"><span class="lbl">Base Elo</span><span class="val">${Math.round(eloDetB.base)}</span></div>
+          <div class="mi-calc-row"><span class="lbl">Performance</span><span class="val">${fmtAdj(eloDetB.perfAdj)}</span></div>
+          <div class="mi-calc-row"><span class="lbl">Opponent Str.</span><span class="val">${fmtAdj(eloDetB.pathAdj)}</span></div>
+          <div class="mi-calc-row"><span class="lbl">Momentum</span><span class="val">${fmtAdj(eloDetB.momentumAdj)}</span></div>
+          <div class="mi-calc-row total"><span class="lbl">Effective Elo</span><span class="val">${Math.round(eloDetB.effectiveElo)}</span></div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // Momentum badges
+  const momA = sA.inForm;
+  const momB = sB.inForm;
+  if (momA || momB) {
+    html += `<div style="padding:2px 14px 6px">`;
+    if (momA) html += `<div class="mi-momentum-badge">${TEAMS[homeCode].name} in form</div>`;
+    if (momB) html += `<div class="mi-momentum-badge">${TEAMS[awayCode].name} in form</div>`;
+    html += `</div>`;
+  }
+
+  // Recent results
+  const histA = (sA.matchHistory || []).slice(-3);
+  const histB = (sB.matchHistory || []).slice(-3);
+  if (histA.length > 0 || histB.length > 0) {
+    function resultItem(h) {
+      const oppName = TEAMS[h.vs] ? TEAMS[h.vs].name : (h.vs || '?');
+      const score = (h.scoreFor !== null && h.scoreFor !== undefined) ? h.scoreFor + '–' + h.scoreAg : '';
+      const isDraw = h.scoreFor !== null && h.scoreFor === h.scoreAg;
+      const cls = h.won ? 'rw' : isDraw ? 'rd' : 'rl';
+      const ltr = h.won ? 'W' : isDraw ? 'D' : 'L';
+      return `<div class="mi-result-item"><span class="${cls}">${ltr}</span> ${oppName} ${score}</div>`;
+    }
+
+    html += `<div class="mi-results-section">
+      <div class="mi-results-title">Recent results</div>
+      <div class="mi-results-grid">
+        <div>
+          <div style="font-size:9px;color:#333;margin-bottom:2px;font-weight:600">${TEAMS[homeCode].name}</div>
+          ${histA.map(resultItem).join('')}
+        </div>
+        <div>
+          <div style="font-size:9px;color:#333;margin-bottom:2px;font-weight:600">${TEAMS[awayCode].name}</div>
+          ${histB.map(resultItem).join('')}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  panel.innerHTML = html;
+
+  // --- Position the panel ---
+  panel.classList.remove('visible');
+  panel.style.display    = 'block';
+  panel.style.visibility = 'hidden';
+  panel.style.left       = '0px';
+  panel.style.top        = '0px';
+
+  void panel.offsetHeight;
+
+  const panelW = panel.offsetWidth;
+  const panelH = panel.offsetHeight;
+
+  const rect   = cardEl.getBoundingClientRect();
+  const vw     = window.innerWidth;
+  const vh     = window.innerHeight;
+  const GAP    = 12;
+  const MARGIN = 8;
+
+  let left = rect.right + GAP;
+  if (left + panelW > vw - MARGIN) {
+    left = rect.left - panelW - GAP;
+  }
+  left = Math.max(MARGIN, Math.min(left, vw - panelW - MARGIN));
+
+  let top = rect.top + (rect.height / 2) - (panelH / 2);
+  top = Math.max(MARGIN, Math.min(top, vh - panelH - MARGIN));
+
+  panel.style.left       = left + 'px';
+  panel.style.top        = top  + 'px';
+  panel.style.visibility = '';
+
+  requestAnimationFrame(() => panel.classList.add('visible'));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 16: UPSET DETECTOR
+   ═══════════════════════════════════════════════════════════════════════ */
+const previousProbabilities = {};
+
+function storePreMatchProb(matchId) {
+  const homeTeam = getTeamForSide(matchId, 'home');
+  const awayTeam = getTeamForSide(matchId, 'away');
+  if (homeTeam && awayTeam) {
+    previousProbabilities[matchId] = getWinProbability(homeTeam, awayTeam);
+  }
+}
+
+function checkUpset(matchId) {
+  const m = bracket.matches[matchId];
+  if (m.status !== 'FINISHED' || !m.winner) return;
+  const probs = previousProbabilities[matchId];
+  if (!probs) return;
+
+  const homeTeam = getTeamForSide(matchId, 'home');
+  const awayTeam = getTeamForSide(matchId, 'away');
+  const winnerTeam = m.winner;
+  const loserTeam  = winnerTeam === homeTeam ? awayTeam : homeTeam;
+
+  const winnerProb = winnerTeam === homeTeam ? probs.pA : probs.pB;
+  if (winnerProb < 0.35) {
+    showUpsetBanner(winnerTeam, loserTeam);
+  }
+}
+
+function showUpsetBanner(winnerCode, loserCode) {
+  const banner = document.getElementById('upset-banner');
+  const wName = TEAMS[winnerCode] ? TEAMS[winnerCode].name : winnerCode;
+  const lName = TEAMS[loserCode] ? TEAMS[loserCode].name : loserCode;
+  banner.textContent = '\u{26A0}\u{FE0F} UPSET \u2014 ' + wName + ' eliminated ' + lName + '!';
+  banner.classList.remove('show');
+  void banner.offsetWidth; // reflow to restart animation
+  banner.classList.add('show');
+  setTimeout(() => banner.classList.remove('show'), 4200);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 17: TOURNAMENT ODDS PANEL
+   ═══════════════════════════════════════════════════════════════════════ */
+function renderOddsPanel() {
+  const container = document.getElementById('tournament-odds');
+  if (!container) return;
+
+  const probs = window.tournamentProbs;
+  const sorted = Object.entries(probs)
+    .filter(([_, p]) => p > 0.005)
+    .sort((a, b) => b[1] - a[1]);
+
+  if (sorted.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  // Build or update
+  container.innerHTML = '';
+  const title = el('div', 'odds-title', 'Tournament winner probabilities');
+  container.appendChild(title);
+
+  const grid = el('div', 'odds-grid');
+  const maxProb = sorted[0][1];
+
+  for (const [code, prob] of sorted) {
+    const t = TEAMS[code];
+    if (!t) continue;
+    const chip = el('div', 'odds-chip');
+
+    const f = el('span', 'chip-flag');
+    const fImg = document.createElement('img');
+    fImg.src    = flagUrl(code);
+    fImg.alt    = t.name;
+    fImg.width  = 16;
+    fImg.height = 11;
+    f.appendChild(fImg);
+
+    const c = el('span', 'chip-code', code);
+    const pctVal = (prob * 100).toFixed(1) + '%';
+    const pct = el('span', 'chip-pct', pctVal);
+    pct.classList.add(prob > 0.12 ? 'high' : prob > 0.05 ? 'mid' : 'low');
+
+    const barBg = el('div', 'chip-bar-bg');
+    const bar = el('div', 'chip-bar');
+    bar.style.width = (prob / maxProb * 100) + '%';
+    bar.style.background = prob > 0.12 ? '#f59e0b' : prob > 0.05 ? '#3b82f6' : '#555';
+    barBg.appendChild(bar);
+
+    chip.appendChild(f);
+    chip.appendChild(c);
+    chip.appendChild(pct);
+    chip.appendChild(barBg);
+    grid.appendChild(chip);
+  }
+  container.appendChild(grid);
+
+  // Update predicted final label
+  updatePredictedFinal(sorted);
+}
+
+function updatePredictedFinal(sorted) {
+  const label = document.getElementById('predicted-final');
+  if (!label || sorted.length < 2) return;
+  const t1 = TEAMS[sorted[0][0]];
+  const t2 = TEAMS[sorted[1][0]];
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 18: STATUS BAR
+   ═══════════════════════════════════════════════════════════════════════ */
+let lastFetchTime = null;
+
+function updateStatusBar(state, msg) {
+  const dot  = document.getElementById('status-dot');
+  const text = document.getElementById('status-text');
+  dot.className = 'status-dot ' + state;
+  text.textContent = msg || '';
+}
+
+function updateIdleStatus() {
+  if (!lastFetchTime) return;
+  const mins = Math.floor((Date.now() - lastFetchTime) / 60000);
+  updateStatusBar('idle', mins === 0 ? 'Updated just now' : 'Updated ' + mins + ' min ago');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 19: API INTEGRATION
+   ═══════════════════════════════════════════════════════════════════════ */
+const STAGE_MAP = {
+  'GROUP_STAGE': 'GRP',
+  'LAST_32': 'R32', 'ROUND_OF_32': 'R32',
+  'LAST_16': 'R16', 'ROUND_OF_16': 'R16',
+  'QUARTER_FINALS': 'QF', 'QUARTER_FINAL': 'QF',
+  'SEMI_FINALS': 'SF', 'SEMI_FINAL': 'SF',
+  'FINAL': 'FINAL',
+  'THIRD_PLACE': '3RD'
+};
+
+async function fetchMatches() {
+  const validKeys = CONFIG.FOOTBALL_DATA_KEYS.filter(k => k && k !== 'YOUR_KEY_HERE' && !k.includes('YOUR_KEY_'));
+  if (validKeys.length === 0) {
+    updateStatusBar('idle', 'No API key — predictions only');
+    return;
+  }
+
+  // file:// origin sends 'null' which football-data.org rejects.
+  // The user must serve from localhost or deploy to GitHub Pages.
+  if (window.location.protocol === 'file:') {
+    updateStatusBar('error', 'Serve from localhost for live data (see console)');
+    console.info(
+      '%cWorld Cup Bracket — CORS fix%c\n\n' +
+      'Opening index.html directly (file://) blocks API requests.\n' +
+      'Serve it from localhost instead:\n\n' +
+      '  Option 1:  npx serve .            (Node.js)\n' +
+      '  Option 2:  python -m http.server  (Python)\n\n' +
+      'Then open http://localhost:3000 (or :8000 for Python).\n' +
+      'On GitHub Pages this works automatically.',
+      'font-weight:bold;font-size:14px;color:#f59e0b',
+      'font-size:12px;color:#ccc'
+    );
+    return;
+  }
+
+  try {
+    updateStatusBar('idle', 'Fetching…');
+    const stages = ['GROUP_STAGE','LAST_32','LAST_16','QUARTER_FINALS','SEMI_FINALS','FINAL','THIRD_PLACE'];
+    const allApiMatches = [];
+
+    for (const stage of stages) {
+      try {
+        const key = validKeys[CONFIG.currentKeyIndex % validKeys.length];
+        const url = 'https://api.football-data.org/v4/competitions/' + CONFIG.WC_COMPETITION_ID + '/matches?stage=' + stage;
+        const res = await fetch(url, { headers: { 'X-Auth-Token': key } });
+        
+        if (res.status === 429) {
+          // Rate limited -> rotate key and retry next cycle
+          CONFIG.currentKeyIndex++;
+          updateStatusBar('error', 'Rate limited. Rotating key…');
+          return;
+        }
+        
+        if (!res.ok) continue;
+        const data = await res.json();
+        if (data.matches) allApiMatches.push(...data.matches);
+      } catch (_) { /* skip this stage */ }
+    }
+
+    processApiMatches(allApiMatches);
+    lastFetchTime = Date.now();
+
+    // Check for live matches
+    const hasLive = Object.values(bracket.matches).some(m => m.status === 'IN_PLAY' || m.status === 'PAUSED');
+    if (hasLive) updateStatusBar('live', 'Live');
+    else updateIdleStatus();
+
+  } catch (err) {
+    console.error('Fetch error:', err);
+    updateStatusBar('error', 'Reconnecting…');
+  }
+}
+
+function processApiMatches(apiMatches) {
+  let changed = false;
+  clearProbCache();
+
+  // Deduplicate: track which API match IDs we've already ingested for stats
+  if (!window._processedApiIds) window._processedApiIds = new Set();
+
+  for (const apiMatch of apiMatches) {
+    const stage = STAGE_MAP[apiMatch.stage] || STAGE_MAP[apiMatch.group] || null;
+    if (!stage) continue;
+
+    const apiHome = resolveApiTeam(apiMatch.homeTeam);
+    const apiAway = resolveApiTeam(apiMatch.awayTeam);
+    if (!apiHome || !apiAway) continue;
+
+    // --- Group stage: update teamStats only, skip bracket ---
+    if (stage === 'GRP') {
+      if (apiMatch.status !== 'FINISHED') continue;
+      const apiId = apiMatch.id || (apiHome + apiAway + apiMatch.utcDate);
+      if (window._processedApiIds.has(apiId)) continue;
+      window._processedApiIds.add(apiId);
+
+      const hs = apiMatch.score?.fullTime?.home ?? null;
+      const as = apiMatch.score?.fullTime?.away ?? null;
+      if (hs === null || as === null) continue;
+
+      const hStats = teamStats[apiHome];
+      const aStats = teamStats[apiAway];
+      if (!hStats || !aStats) continue;
+
+      hStats.matchesPlayed++; aStats.matchesPlayed++;
+      hStats.goalsFor += hs; hStats.goalsAgainst += as;
+      aStats.goalsFor += as; aStats.goalsAgainst += hs;
+      if (as === 0) hStats.cleanSheets++;
+      if (hs === 0) aStats.cleanSheets++;
+
+      if (hs > as)       { hStats.wins++; aStats.losses++; hStats.opponentsBeaten.push(apiAway); }
+      else if (as > hs)  { aStats.wins++; hStats.losses++; aStats.opponentsBeaten.push(apiHome); }
+      else               { hStats.draws++; aStats.draws++; }
+
+      // Momentum: last group match win by 2+ or clean sheet
+      const gd = Math.abs(hs - as);
+      if (hs > as && (gd >= 2 || as === 0)) hStats.inForm = true;
+      if (as > hs && (gd >= 2 || hs === 0)) aStats.inForm = true;
+
+      // Store match in history
+      hStats.matchHistory.push({ vs: apiAway, scoreFor: hs, scoreAg: as, won: hs > as, stage: 'GRP', date: apiMatch.utcDate });
+      aStats.matchHistory.push({ vs: apiHome, scoreFor: as, scoreAg: hs, won: as > hs, stage: 'GRP', date: apiMatch.utcDate });
+
+      changed = true;
+      continue;
+    }
+
+    // --- Knockout stages: map to bracket ---
+    const internalId = findInternalMatch(apiHome, apiAway, stage);
+    if (!internalId) continue;
+
+    const m = bracket.matches[internalId];
+    const prevStatus = m.status;
+
+    // Store pre-match probabilities before updating (for upset detection)
+    if (prevStatus !== 'FINISHED' && apiMatch.status === 'FINISHED') {
+      storePreMatchProb(internalId);
+    }
+
+    // Update match data
+    if (apiMatch.score && apiMatch.score.fullTime) {
+      m.homeScore = apiMatch.score.fullTime.home;
+      m.awayScore = apiMatch.score.fullTime.away;
+    }
+    m.status = apiMatch.status || m.status;
+
+    // Store utcDate on match for display
+    if (apiMatch.utcDate) m.utcDate = apiMatch.utcDate;
+
+    if (apiMatch.score && apiMatch.score.winner) {
+      const oldWinner = m.winner;
+      if (apiMatch.score.winner === 'HOME_TEAM') m.winner = apiHome;
+      else if (apiMatch.score.winner === 'AWAY_TEAM') m.winner = apiAway;
+      else m.winner = null;
+
+      if (m.winner && m.winner !== oldWinner) {
+        const def = MATCH_DEFS[internalId];
+        bracket.slots[def.winnerSlot] = m.winner;
+        const loser = m.winner === apiHome ? apiAway : apiHome;
+        if (def.loserSlot) bracket.slots[def.loserSlot] = loser;
+
+        // Evidence Stacking Update
+        const homeStats = teamStats[apiHome];
+        const awayStats = teamStats[apiAway];
+        
+        homeStats.matchesPlayed++; awayStats.matchesPlayed++;
+        homeStats.goalsFor += (m.homeScore || 0);
+        homeStats.goalsAgainst += (m.awayScore || 0);
+        awayStats.goalsFor += (m.awayScore || 0);
+        awayStats.goalsAgainst += (m.homeScore || 0);
+        
+        if (m.homeScore === 0) awayStats.cleanSheets++;
+        if (m.awayScore === 0) homeStats.cleanSheets++;
+
+        // W/D/L
+        if (m.winner === apiHome)      { homeStats.wins++; awayStats.losses++; }
+        else if (m.winner === apiAway) { awayStats.wins++; homeStats.losses++; }
+
+        // Winner stats
+        const winnerStats = teamStats[m.winner];
+        const loserCode = m.winner === apiHome ? apiAway : apiHome;
+        winnerStats.opponentsBeaten.push(loserCode);
+        
+        // Momentum flag
+        const goalDiff = Math.abs((m.homeScore || 0) - (m.awayScore || 0));
+        homeStats.inForm = (apiHome === m.winner) && (goalDiff >= 2 || m.awayScore === 0);
+        awayStats.inForm = (apiAway === m.winner) && (goalDiff >= 2 || m.homeScore === 0);
+
+        // Match history
+        homeStats.matchHistory.push({ vs: apiAway, scoreFor: m.homeScore, scoreAg: m.awayScore, won: m.winner === apiHome, stage, date: apiMatch.utcDate });
+        awayStats.matchHistory.push({ vs: apiHome, scoreFor: m.awayScore, scoreAg: m.homeScore, won: m.winner === apiAway, stage, date: apiMatch.utcDate });
+
+        changed = true;
+      }
+    }
+
+    // Check for upset
+    if (prevStatus !== 'FINISHED' && m.status === 'FINISHED') {
+      checkUpset(internalId);
+    }
+  }
+
+  if (changed || apiMatches.length > 0) {
+    fillPredictions();
+    updateAllCards();
+    simulateTournament();
+    renderOddsPanel();
+    requestAnimationFrame(drawConnectors);
+  }
+}
+
+function findInternalMatch(homeCode, awayCode, stage) {
+  const roundMatches = ROUND_MATCHES[stage];
+  if (!roundMatches) return null;
+
+  for (const mid of roundMatches) {
+    const h = getTeamForSide(mid, 'home');
+    const a = getTeamForSide(mid, 'away');
+    if ((h === homeCode && a === awayCode) || (h === awayCode && a === homeCode)) return mid;
+  }
+  // Fallback: check all matches
+  for (const mid of Object.keys(MATCH_DEFS)) {
+    const h = getTeamForSide(mid, 'home');
+    const a = getTeamForSide(mid, 'away');
+    if ((h === homeCode && a === awayCode) || (h === awayCode && a === homeCode)) return mid;
+  }
+  return null;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 20: POLLING LOOP
+   ═══════════════════════════════════════════════════════════════════════ */
+let pollTimer = null;
+
+function startPolling() {
+  fetchMatches();
+  pollTimer = setInterval(fetchMatches, CONFIG.POLL_INTERVAL_MS);
+  // Update "X min ago" every 30 seconds
+  setInterval(updateIdleStatus, 30000);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 21: WINDOW RESIZE HANDLER
+   ═══════════════════════════════════════════════════════════════════════ */
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    drawConnectors();
+  }, 150);
+});
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SECTION 22: INITIALISATION
+   ═══════════════════════════════════════════════════════════════════════ */
+function init() {
+  initBracketState();
+  buildBracket();
+
+  // Run initial simulation
+  simulateTournament();
+  renderOddsPanel();
+
+  // Refresh button
+  document.getElementById('refresh-btn').addEventListener('click', () => {
+    fetchMatches();
+  });
+
+  // Start API polling
+  startPolling();
+}
+
+// Boot
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
+</script>
+</body>
+</html>
