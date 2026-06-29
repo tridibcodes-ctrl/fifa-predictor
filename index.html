@@ -910,6 +910,19 @@ body {
 /* Final / 3rd Place Labels */
 .predicted-final-label { color: #aaa; font-size: 12px; } 
 .third-place-label { color: #aaa; font-size: 11px; }
+/* ========================================================
+   SVG LINE GLOW EFFECT
+   ======================================================== */
+#connectors line {
+  transition: stroke 0.3s ease, filter 0.3s ease, stroke-width 0.3s ease;
+}
+
+#connectors line.glow {
+  stroke: #3b82f6 !important; /* Blue glow */
+  stroke-width: 3px !important;
+  filter: drop-shadow(0 0 6px rgba(59,130,246,0.8));
+}
+
 
 </style>
 </head>
@@ -1775,6 +1788,73 @@ function drawConnectors() {
 
   const svgNS = 'http://www.w3.org/2000/svg';
 
+  function getCardCenter(matchId) {
+    const card = document.getElementById('card-' + matchId);
+    if (!card) return null;
+    const r = card.getBoundingClientRect();
+    return {
+      left: r.left - bRect.left, right: r.right - bRect.left,
+      top: r.top - bRect.top, bottom: r.bottom - bRect.top,
+      cy: r.top - bRect.top + r.height / 2,
+      cx: r.left - bRect.left + r.width / 2
+    };
+  }
+
+  // UPDATED: Now accepts an array of matches and adds them to a data attribute
+  function line(x1, y1, x2, y2, matches = []) {
+    const l = document.createElementNS(svgNS, 'line');
+    l.setAttribute('x1', x1); l.setAttribute('y1', y1);
+    l.setAttribute('x2', x2); l.setAttribute('y2', y2);
+    l.setAttribute('stroke', 'rgba(255, 255, 255, 0.25)'); // Brighter default line
+    l.setAttribute('stroke-width', '2'); // Thicker default line
+    
+    // Tag the line segment with space-separated match IDs
+    l.dataset.matches = matches.join(' ');
+    svg.appendChild(l);
+  }
+
+  for (const conn of CONNECTOR_DEFS) {
+    const tPos = getCardCenter(conn.target);
+    if (!tPos) continue;
+
+    if (conn.sources.length === 2) {
+      const s1 = getCardCenter(conn.sources[0]);
+      const s2 = getCardCenter(conn.sources[1]);
+      if (!s1 || !s2) continue;
+      
+      const m1 = conn.sources[0];
+      const m2 = conn.sources[1];
+      const tgt = conn.target;
+
+      if (conn.side === 'left') {
+        const midX = (Math.max(s1.right, s2.right) + tPos.left) / 2;
+        line(s1.right, s1.cy, midX, s1.cy, [m1, tgt]);
+        line(s2.right, s2.cy, midX, s2.cy, [m2, tgt]);
+        line(midX, s1.cy, midX, s2.cy, [m1, m2, tgt]);
+        line(midX, tPos.cy, tPos.left, tPos.cy, [m1, m2, tgt]);
+      } else {
+        const midX = (Math.min(s1.left, s2.left) + tPos.right) / 2;
+        line(s1.left, s1.cy, midX, s1.cy, [m1, tgt]);
+        line(s2.left, s2.cy, midX, s2.cy, [m2, tgt]);
+        line(midX, s1.cy, midX, s2.cy, [m1, m2, tgt]);
+        line(midX, tPos.cy, tPos.right, tPos.cy, [m1, m2, tgt]);
+      }
+    } else if (conn.sources.length === 1) {
+      // 1:1 connection (SF → Final)
+      const s = getCardCenter(conn.sources[0]);
+      if (!s) continue;
+      
+      const m1 = conn.sources[0];
+      const tgt = conn.target;
+
+      if (conn.side === 'left') {
+        line(s.right, s.cy, tPos.left, tPos.cy, [m1, tgt]);
+      } else {
+        line(s.left, s.cy, tPos.right, tPos.cy, [m1, tgt]);
+      }
+    }
+  }
+}
   function getCardCenter(matchId) {
     const card = document.getElementById('card-' + matchId);
     if (!card) return null;
