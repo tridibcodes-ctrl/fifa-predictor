@@ -860,6 +860,57 @@ body {
 @media (min-width: 769px) {
   .mobile-round-label { display: none !important; }
 }
+   /* ========================================================
+   FIX: BRIGHTER TEXT & LARGER HOVER TILE FONTS
+   ======================================================== */
+
+/* 1. BRIGHTEN GLOBAL & BRACKET TEXT */
+.round-header { color: #bbb; } 
+.team-name { color: #f0f0f0; } 
+.team-name.placeholder { color: #888; } 
+.team-score { color: #fff; } 
+.mobile-round-label { color: #bbb; } 
+.odds-title { color: #ccc; } 
+.odds-chip .chip-code { color: #ccc; } 
+
+/* 2. MATCH INSIGHT (HOVER TILE) - BRIGHTER TEXT & LARGER FONTS */
+#match-insight {
+  width: 380px; /* Increased from 320px to fit larger text */
+}
+
+/* Headers and Dates */
+.mi-round-label { color: #ccc; font-size: 12px; } 
+.mi-status-tag { font-size: 11px; } 
+.mi-date-row { color: #aaa; font-size: 11px; } 
+
+/* Team Names and Form */
+.mi-team-name { color: #fff; font-size: 14px; max-width: 130px; } 
+.mi-form-line { color: #aaa; font-size: 11px; } 
+.mi-form-line .fd { color: #bbb; } 
+.mi-vs-label { color: #ccc; font-size: 12px; } 
+.mi-score-sep { color: #aaa; } 
+
+/* Probabilities */
+.mi-prob-labels { color: #ccc; font-size: 12px; } 
+.mi-prob-labels span:nth-child(2) { color: #aaa !important; font-size: 11px !important; }
+
+/* Comparison Table */
+.mi-cval { color: #eee; font-size: 12px; } 
+.mi-clabel { color: #aaa; font-size: 11px; } 
+
+/* Results and Calculations */
+.mi-results-title, .mi-calc-title { color: #ddd; font-size: 12px; } 
+.mi-result-item { color: #ccc; font-size: 11px; } 
+.mi-result-item .rd { color: #aaa; } 
+.mi-calc-row { color: #ccc; font-size: 11px; } 
+.mi-calc-row .lbl { color: #aaa; } 
+.mi-calc-row.total .lbl { color: #ddd; } 
+.mi-momentum-badge { font-size: 11px; } 
+
+/* Final / 3rd Place Labels */
+.predicted-final-label { color: #aaa; font-size: 12px; } 
+.third-place-label { color: #aaa; font-size: 11px; }
+
 </style>
 </head>
 <body>
