@@ -1779,6 +1779,7 @@ function updateAllCards() {
 /* ═══════════════════════════════════════════════════════════════════════
    SECTION 14: SVG CONNECTORS
    ═══════════════════════════════════════════════════════════════════════ */
+
 function drawConnectors() {
   const svg = document.getElementById('connectors');
   if (!svg) return;
@@ -1863,63 +1864,7 @@ function drawConnectors() {
     }
   }
 }
-  function getCardCenter(matchId) {
-    const card = document.getElementById('card-' + matchId);
-    if (!card) return null;
-    const r = card.getBoundingClientRect();
-    return {
-      left: r.left - bRect.left, right: r.right - bRect.left,
-      top: r.top - bRect.top, bottom: r.bottom - bRect.top,
-      cy: r.top - bRect.top + r.height / 2,
-      cx: r.left - bRect.left + r.width / 2
-    };
-  }
-
-  function line(x1, y1, x2, y2) {
-    const l = document.createElementNS(svgNS, 'line');
-    l.setAttribute('x1', x1); l.setAttribute('y1', y1);
-    l.setAttribute('x2', x2); l.setAttribute('y2', y2);
-    l.setAttribute('stroke', 'rgba(255, 255, 255, 0.25)');
-    l.setAttribute('stroke-width', '2');
-    svg.appendChild(l);
-  }
-
-  for (const conn of CONNECTOR_DEFS) {
-    const tPos = getCardCenter(conn.target);
-    if (!tPos) continue;
-
-    if (conn.sources.length === 2) {
-      const s1 = getCardCenter(conn.sources[0]);
-      const s2 = getCardCenter(conn.sources[1]);
-      if (!s1 || !s2) continue;
-
-      if (conn.side === 'left') {
-        const midX = (Math.max(s1.right, s2.right) + tPos.left) / 2;
-        line(s1.right, s1.cy, midX, s1.cy);
-        line(s2.right, s2.cy, midX, s2.cy);
-        line(midX, s1.cy, midX, s2.cy);
-        line(midX, tPos.cy, tPos.left, tPos.cy);
-      } else {
-        const midX = (Math.min(s1.left, s2.left) + tPos.right) / 2;
-        line(s1.left, s1.cy, midX, s1.cy);
-        line(s2.left, s2.cy, midX, s2.cy);
-        line(midX, s1.cy, midX, s2.cy);
-        line(midX, tPos.cy, tPos.right, tPos.cy);
-      }
-    } else if (conn.sources.length === 1) {
-      // 1:1 connection (SF → Final)
-      const s = getCardCenter(conn.sources[0]);
-      if (!s) continue;
-      if (conn.side === 'left') {
-        line(s.right, s.cy, tPos.left, tPos.cy);
-      } else {
-        line(s.left, s.cy, tPos.right, tPos.cy);
-      }
-    }
-  }
-}
-
-/* ═══════════════════════════════════════════════════════════════════════
+   /* ═══════════════════════════════════════════════════════════════════════
    SECTION 15: MATCH INSIGHT PANEL
    ═══════════════════════════════════════════════════════════════════════ */
 
