@@ -1791,8 +1791,8 @@ function drawConnectors() {
     const l = document.createElementNS(svgNS, 'line');
     l.setAttribute('x1', x1); l.setAttribute('y1', y1);
     l.setAttribute('x2', x2); l.setAttribute('y2', y2);
-    l.setAttribute('stroke', '#1e1e1e');
-    l.setAttribute('stroke-width', '1');
+    l.setAttribute('stroke', 'rgba(255, 255, 255, 0.25)');
+    l.setAttribute('stroke-width', '2');
     svg.appendChild(l);
   }
 
