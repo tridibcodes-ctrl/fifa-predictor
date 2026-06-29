@@ -1581,9 +1581,17 @@ function buildMatchCard(matchId) {
   slot.appendChild(card);
 
   // Card hover → show match insight panel
-  card.addEventListener('mouseenter', () => showMatchInsight(matchId, card));
-  card.addEventListener('mouseleave', hideMatchInsight);
+card.addEventListener('mouseenter', () => {
+    showMatchInsight(matchId, card);
+    // Find all lines tagged with this matchId and add the glow class
+    document.querySelectorAll(`line[data-matches~="${matchId}"]`).forEach(l => l.classList.add('glow'));
+  });
 
+  card.addEventListener('mouseleave', () => {
+    hideMatchInsight();
+    // Remove the glow from everything when the mouse leaves
+    document.querySelectorAll('.glow').forEach(l => l.classList.remove('glow'));
+  });
   cardEls[matchId] = {
     root: slot, card: card, badge: pill, barFill: barFill,
     homeRow: homeEls.row, awayRow: awayEls.row,
