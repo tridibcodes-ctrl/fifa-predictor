@@ -1745,8 +1745,16 @@ function updateMatchCard(matchId) {
   // In-play card glow
   ce.card.classList.toggle('in-play', m.status === 'IN_PLAY' || m.status === 'PAUSED');
 
-  // FT tag
-  ce.ftTag.classList.toggle('visible', m.status === 'FINISHED');
+  // FT tag — show how match was decided
+  if (m.status === 'FINISHED') {
+    const dur = m.duration || 'REGULAR_TIME';
+    if (dur === 'PENALTY_SHOOTOUT') ce.ftTag.textContent = 'PEN';
+    else if (dur === 'EXTRA_TIME')  ce.ftTag.textContent = 'AET';
+    else                             ce.ftTag.textContent = 'FT';
+    ce.ftTag.classList.add('visible');
+  } else {
+    ce.ftTag.classList.remove('visible');
+  }
 
   // Prediction badge & bar
   if (homeTeam && awayTeam && TEAM_RATINGS[homeTeam] && TEAM_RATINGS[awayTeam]) {
@@ -2428,11 +2436,26 @@ function processApiMatches(apiMatches) {
     // Store utcDate on match for display
     if (apiMatch.utcDate) m.utcDate = apiMatch.utcDate;
 
-    if (apiMatch.score && apiMatch.score.winner) {
+    if (apiMatch.score && (apiMatch.score.winner || apiMatch.score.duration === 'PENALTY_SHOOTOUT' || apiMatch.score.duration === 'EXTRA_TIME')) {
       const oldWinner = m.winner;
-      if (apiMatch.score.winner === 'HOME_TEAM') m.winner = apiHome;
-      else if (apiMatch.score.winner === 'AWAY_TEAM') m.winner = apiAway;
-      else m.winner = null;
+
+      let resolvedWinner = null;
+      if (apiMatch.score.winner === 'HOME_TEAM') {
+        resolvedWinner = apiHome;
+      } else if (apiMatch.score.winner === 'AWAY_TEAM') {
+        resolvedWinner = apiAway;
+      } else if (apiMatch.status === 'FINISHED' && apiMatch.score.fullTime) {
+        // Penalties / extra time: winner is whoever has more in fullTime (which includes shootout goals)
+        const hs = apiMatch.score.fullTime.home;
+        const as = apiMatch.score.fullTime.away;
+        if (hs !== null && as !== null && hs !== as) {
+          resolvedWinner = hs > as ? apiHome : apiAway;
+        }
+      }
+      m.winner = resolvedWinner;
+
+      // Store how the match was decided so we can show it in the UI
+      m.duration = apiMatch.score.duration || 'REGULAR_TIME';
 
       if (m.winner && m.winner !== oldWinner) {
         const def = MATCH_DEFS[internalId];
