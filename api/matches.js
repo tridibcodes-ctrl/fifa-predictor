@@ -40,7 +40,7 @@ export default async function handler(request, response) {
     
     // Vercel serverless handles CORS automatically, but we can be explicit
     response.setHeader('Access-Control-Allow-Origin', '*');
-    response.setHeader('Cache-Control', 's-maxage=60'); // Cache for 60 seconds
+    response.setHeader('Cache-Control', 's-maxage=15'); // Cache for 15 seconds to allow live goals through quickly
     
     return response.status(200).json(data);
   } catch (err) {

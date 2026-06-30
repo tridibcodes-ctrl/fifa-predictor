@@ -964,7 +964,7 @@ body {
    SECTION 1: CONFIGURATION
    ═══════════════════════════════════════════════════════════════════════ */
 const CONFIG = {
-  POLL_INTERVAL_MS: 60000,
+  WC_COMPETITION_ID: 2000,
   WC_COMPETITION_ID: 2000,
   MONTE_CARLO_N: 5000,
   // Model hyperparameters (tunable, can be validated against historical data)
@@ -2355,9 +2355,14 @@ async function fetchMatches() {
     if (hasLive) updateStatusBar('live', 'Live');
     else updateIdleStatus();
 
+    // Adaptive polling: 15 seconds if live matches exist, 60 seconds otherwise
+    const nextInterval = hasLive ? 15000 : 60000;
+    pollTimer = setTimeout(fetchMatches, nextInterval);
+
   } catch (err) {
     console.error('Fetch error:', err);
     updateStatusBar('error', 'Reconnecting…');
+    pollTimer = setTimeout(fetchMatches, 15000);
   }
 }
 
@@ -2537,8 +2542,7 @@ function findInternalMatch(homeCode, awayCode, stage) {
 let pollTimer = null;
 
 function startPolling() {
-  fetchMatches();
-  pollTimer = setInterval(fetchMatches, CONFIG.POLL_INTERVAL_MS);
+  fetchMatches(); // fetchMatches will automatically queue its own next fetch
   // Update "X min ago" every 30 seconds
   setInterval(updateIdleStatus, 30000);
 }
